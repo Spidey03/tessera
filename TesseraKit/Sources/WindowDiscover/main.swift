@@ -30,10 +30,18 @@ func printWindows(_ windows: [MacWindow]) {
         let appWindows = grouped[appName]!
         let pid = appWindows.first!.appPID
         let focusedCount = appWindows.filter(\.isFocused).count
-        print("\(appName) [PID: \(pid)] — \(appWindows.count) window(s)", focusedCount > 0 ? "★" : "")
+        let globalFocusedCount = appWindows.filter(\.isGloballyFocused).count
+        print("\(appName) [PID: \(pid)] — \(appWindows.count) window(s)", globalFocusedCount > 0 ? "★" : focusedCount > 0 ? "☆" : "")
 
         for (i, win) in appWindows.enumerated() {
-            let marker = win.isFocused ? " ◀ focused" : ""
+            let marker: String
+            if win.isGloballyFocused {
+                marker = " ◀ global focus"
+            } else if win.isFocused {
+                marker = " ◀ app focus"
+            } else {
+                marker = ""
+            }
             print("  └─ #\(i + 1): \(Int(win.position.x)),\(Int(win.position.y)) \(Int(win.size.width))x\(Int(win.size.height)) \"\(win.title)\"\(marker)")
         }
     }

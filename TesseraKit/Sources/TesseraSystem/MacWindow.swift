@@ -9,6 +9,7 @@ public struct MacWindow {
     public var position: CGPoint
     public var size: CGSize
     public let isFocused: Bool
+    public let isGloballyFocused: Bool
     public let isMinimized: Bool
 
     public var frame: CGRect {
@@ -18,7 +19,7 @@ public struct MacWindow {
 
 extension MacWindow: CustomStringConvertible {
     public var description: String {
-        let focusMark = isFocused ? " [focused]" : ""
+        let focusMark = isGloballyFocused ? " [global]" : isFocused ? " [app-focused]" : ""
         return "\(appName)[\(appPID)] \"\(title)\" at (\(Int(position.x)), \(Int(position.y))) \(Int(size.width))x\(Int(size.height))\(focusMark)"
     }
 }

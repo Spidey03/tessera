@@ -6,7 +6,8 @@ public struct WindowDiscovery {
 
     public static func allWindows() -> [MacWindow] {
         let apps = runningApps()
-        return apps.flatMap { windows(of: $0) }
+        let frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        return apps.flatMap { windows(of: $0, frontmostPID: frontmostPID) }
     }
 
     public static func runningApps() -> [NSRunningApplication] {
@@ -16,20 +17,29 @@ public struct WindowDiscovery {
             .sorted { ($0.localizedName ?? "") < ($1.localizedName ?? "") }
     }
 
-    public static func windows(of app: NSRunningApplication) -> [MacWindow] {
+    public static func windows(of app: NSRunningApplication, frontmostPID: pid_t? = nil) -> [MacWindow] {
         let appElement = AXUIElementCreateApplication(app.processIdentifier)
         guard let windowList: [AXUIElement] = getAttr(element: appElement, key: kAXWindowsAttribute) else {
             return []
         }
 
+        let focusedWindow: AXUIElement? = getAttr(element: appElement, key: kAXFocusedWindowAttribute)
+
         return windowList.compactMap { win in
             let title: String = getAttr(element: win, key: kAXTitleAttribute) ?? ""
-            let focused: Bool = getAttr(element: win, key: kAXFocusedAttribute) ?? false
             let minimized: Bool = getAttr(element: win, key: kAXMinimizedAttribute) ?? true
+            let isFocused: Bool = focusedWindow.map { CFEqual(win, $0) } ?? false
 
             guard let position = getPosition(element: win),
                   let size = getSize(element: win) else {
                 return nil
+            }
+
+            let isGloballyFocused: Bool
+            if let frontmostPID {
+                isGloballyFocused = (app.processIdentifier == frontmostPID) && isFocused
+            } else {
+                isGloballyFocused = false
             }
 
             return MacWindow(
@@ -39,7 +49,8 @@ public struct WindowDiscovery {
                 title: title,
                 position: position,
                 size: size,
-                isFocused: focused,
+                isFocused: isFocused,
+                isGloballyFocused: isGloballyFocused,
                 isMinimized: minimized
             )
         }
