@@ -1,0 +1,103 @@
+client:
+  name: basic
+  file-system: device-agnostic
+tools: {}
+targets:
+  "PackageStructure": ["<PackageStructure>"]
+  "TesseraKit-arm64-apple-macosx-debug.module": ["<TesseraKit-arm64-apple-macosx-debug.module>"]
+  "TesseraTests-arm64-apple-macosx-debug.exe": ["<TesseraTests-arm64-apple-macosx-debug.exe>"]
+  "TesseraTests-arm64-apple-macosx-debug.module": ["<TesseraTests-arm64-apple-macosx-debug.module>"]
+  "main": ["<TesseraKit-arm64-apple-macosx-debug.module>","<TesseraTests-arm64-apple-macosx-debug.exe>","<TesseraTests-arm64-apple-macosx-debug.module>"]
+  "test": ["<TesseraKit-arm64-apple-macosx-debug.module>","<TesseraTests-arm64-apple-macosx-debug.exe>","<TesseraTests-arm64-apple-macosx-debug.module>"]
+default: "main"
+nodes:
+  "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/":
+    is-directory-structure: true
+    content-exclusion-patterns: [".git",".build"]
+  "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraTests/":
+    is-directory-structure: true
+    content-exclusion-patterns: [".git",".build"]
+  "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests":
+    is-mutated: true
+commands:
+  "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/sources":
+    tool: write-auxiliary-file
+    inputs: ["<sources-file-list>","/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/Rect.swift","/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/SplitType.swift","/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/TesseraConfig.swift","/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/TreeNode.swift","/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/Window.swift","/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/Workspace.swift","/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/TesseraKit.swift"]
+    outputs: ["/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/sources"]
+    description: "Write auxiliary file /Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/sources"
+
+  "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests-entitlement.plist":
+    tool: write-auxiliary-file
+    inputs: ["<entitlement-plist>","<com.apple.security.get-task-allow>"]
+    outputs: ["/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests-entitlement.plist"]
+    description: "Write auxiliary file /Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests-entitlement.plist"
+
+  "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests.build/sources":
+    tool: write-auxiliary-file
+    inputs: ["<sources-file-list>","/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraTests/main.swift"]
+    outputs: ["/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests.build/sources"]
+    description: "Write auxiliary file /Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests.build/sources"
+
+  "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests.product/Objects.LinkFileList":
+    tool: write-auxiliary-file
+    inputs: ["<link-file-list>","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Rect.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/SplitType.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TesseraConfig.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TesseraKit.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TreeNode.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Window.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Workspace.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests.build/main.swift.o"]
+    outputs: ["/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests.product/Objects.LinkFileList"]
+    description: "Write auxiliary file /Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests.product/Objects.LinkFileList"
+
+  "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt":
+    tool: write-auxiliary-file
+    inputs: ["<swift-get-version>","/Library/Developer/CommandLineTools/usr/bin/swiftc"]
+    outputs: ["/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt"]
+    always-out-of-date: "true"
+    description: "Write auxiliary file /Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt"
+
+  "<TesseraKit-arm64-apple-macosx-debug.module>":
+    tool: phony
+    inputs: ["/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Rect.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/SplitType.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TesseraConfig.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TreeNode.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Window.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Workspace.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TesseraKit.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/Modules/TesseraKit.swiftmodule"]
+    outputs: ["<TesseraKit-arm64-apple-macosx-debug.module>"]
+
+  "<TesseraTests-arm64-apple-macosx-debug.exe>":
+    tool: phony
+    inputs: ["<TesseraTests-arm64-apple-macosx-debug.exe-CodeSigning>"]
+    outputs: ["<TesseraTests-arm64-apple-macosx-debug.exe>"]
+
+  "<TesseraTests-arm64-apple-macosx-debug.module>":
+    tool: phony
+    inputs: ["/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests.build/main.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/Modules/TesseraTests.swiftmodule"]
+    outputs: ["<TesseraTests-arm64-apple-macosx-debug.module>"]
+
+  "C.TesseraKit-arm64-apple-macosx-debug.module":
+    tool: shell
+    inputs: ["/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/Rect.swift","/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/SplitType.swift","/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/TesseraConfig.swift","/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/TreeNode.swift","/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/Window.swift","/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/Workspace.swift","/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/TesseraKit.swift","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/sources"]
+    outputs: ["/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Rect.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/SplitType.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TesseraConfig.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TreeNode.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Window.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Workspace.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TesseraKit.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/Modules/TesseraKit.swiftmodule"]
+    description: "Compiling Swift Module 'TesseraKit' (7 sources)"
+    args: ["/Library/Developer/CommandLineTools/usr/bin/swiftc","-module-name","TesseraKit","-emit-dependencies","-emit-module","-emit-module-path","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/Modules/TesseraKit.swiftmodule","-output-file-map","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/output-file-map.json","-parse-as-library","-incremental","-c","@/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/sources","-I","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/Modules","-target","arm64-apple-macosx10.13","-incremental","-enable-batch-mode","-serialize-diagnostics","-index-store-path","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/index/store","-Onone","-enable-testing","-j18","-DSWIFT_PACKAGE","-DDEBUG","-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE","-module-cache-path","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/ModuleCache","-parseable-output","-parse-as-library","-emit-objc-header","-emit-objc-header-path","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/include/TesseraKit-Swift.h","-swift-version","6","-I","/Library/Developer/CommandLineTools/Library/Developer/Frameworks","-L","/Library/Developer/CommandLineTools/Library/Developer/Frameworks","-plugin-path","/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing","-sdk","/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk","-g","-Xcc","-isysroot","-Xcc","/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk","-Xcc","-fPIC","-Xcc","-g","-package-name","tesserakit"]
+
+  "C.TesseraTests-arm64-apple-macosx-debug.exe":
+    tool: shell
+    inputs: ["/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Rect.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/SplitType.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TesseraConfig.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TesseraKit.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TreeNode.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Window.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Workspace.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests.build/main.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests.product/Objects.LinkFileList"]
+    outputs: ["/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests"]
+    description: "Linking ./.build/arm64-apple-macosx/debug/TesseraTests"
+    args: ["/Library/Developer/CommandLineTools/usr/bin/swiftc","-L","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug","-o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests","-module-name","TesseraTests","-Xlinker","-no_warn_duplicate_libraries","-emit-executable","-Xlinker","-alias","-Xlinker","_TesseraTests_main","-Xlinker","_main","-Xlinker","-rpath","-Xlinker","@loader_path","@/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests.product/Objects.LinkFileList","-Xlinker","-rpath","-Xlinker","/Library/Developer/CommandLineTools/usr/lib/swift-5.5/macosx","-Xlinker","-rpath","-Xlinker","/Library/Developer/CommandLineTools/usr/lib/swift-6.2/macosx","-target","arm64-apple-macosx10.13","-Xlinker","-add_ast_path","-Xlinker","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/Modules/TesseraKit.swiftmodule","-Xlinker","-add_ast_path","-Xlinker","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/Modules/TesseraTests.swiftmodule","-I","/Library/Developer/CommandLineTools/Library/Developer/Frameworks","-L","/Library/Developer/CommandLineTools/Library/Developer/Frameworks","-plugin-path","/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing","-sdk","/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk","-g"]
+
+  "C.TesseraTests-arm64-apple-macosx-debug.exe-entitlements":
+    tool: shell
+    inputs: ["/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests-entitlement.plist"]
+    outputs: ["<TesseraTests-arm64-apple-macosx-debug.exe-CodeSigning>"]
+    description: "Applying debug entitlements to ./.build/arm64-apple-macosx/debug/TesseraTests"
+    args: ["codesign","--force","--sign","-","--entitlements","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests-entitlement.plist","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests"]
+
+  "C.TesseraTests-arm64-apple-macosx-debug.module":
+    tool: shell
+    inputs: ["/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraTests/main.swift","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/Modules/TesseraKit.swiftmodule","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests.build/sources"]
+    outputs: ["/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests.build/main.swift.o","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/Modules/TesseraTests.swiftmodule"]
+    description: "Compiling Swift Module 'TesseraTests' (1 sources)"
+    args: ["/Library/Developer/CommandLineTools/usr/bin/swiftc","-module-name","TesseraTests","-emit-dependencies","-emit-module","-emit-module-path","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/Modules/TesseraTests.swiftmodule","-output-file-map","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests.build/output-file-map.json","-incremental","-c","@/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests.build/sources","-I","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/Modules","-target","arm64-apple-macosx10.13","-incremental","-enable-batch-mode","-serialize-diagnostics","-index-store-path","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/index/store","-Onone","-enable-testing","-j18","-DSWIFT_PACKAGE","-DDEBUG","-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE","-module-cache-path","/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/ModuleCache","-parseable-output","-Xfrontend","-entry-point-function-name","-Xfrontend","TesseraTests_main","-swift-version","6","-I","/Library/Developer/CommandLineTools/Library/Developer/Frameworks","-L","/Library/Developer/CommandLineTools/Library/Developer/Frameworks","-plugin-path","/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing","-sdk","/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk","-g","-Xcc","-isysroot","-Xcc","/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk","-Xcc","-fPIC","-Xcc","-g","-package-name","tesserakit"]
+
+  "PackageStructure":
+    tool: package-structure-tool
+    inputs: ["/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/","/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraTests/","/Users/spidey/Projects/tessera/TesseraKit/Package.swift","/Users/spidey/Projects/tessera/TesseraKit/Package.resolved"]
+    outputs: ["<PackageStructure>"]
+    description: "Planning build"
+    allow-missing-inputs: true
+

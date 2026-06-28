@@ -1,0 +1,3 @@
+module TesseraKitPackageTests {
+    header "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKitPackageTests.build/include/TesseraKitPackageTests-Swift.h"
+}

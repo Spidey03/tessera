@@ -1,0 +1,12 @@
+{
+  "": {
+    "swift-dependencies": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKitPackageTests.build/primary.swiftdeps"
+  },
+  "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKitPackageTests.derived/runner.swift": {
+    "dependencies": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKitPackageTests.build/runner.d",
+    "object": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKitPackageTests.build/runner.swift.o",
+    "swiftmodule": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKitPackageTests.build/runner~partial.swiftmodule",
+    "swift-dependencies": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKitPackageTests.build/runner.swiftdeps",
+    "diagnostics": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKitPackageTests.build/runner.dia"
+  }
+}

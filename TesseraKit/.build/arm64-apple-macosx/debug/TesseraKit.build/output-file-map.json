@@ -1,0 +1,54 @@
+{
+  "": {
+    "swift-dependencies": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/primary.swiftdeps"
+  },
+  "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/Rect.swift": {
+    "dependencies": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Rect.d",
+    "object": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Rect.swift.o",
+    "swiftmodule": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Rect~partial.swiftmodule",
+    "swift-dependencies": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Rect.swiftdeps",
+    "diagnostics": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Rect.dia"
+  },
+  "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/SplitType.swift": {
+    "dependencies": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/SplitType.d",
+    "object": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/SplitType.swift.o",
+    "swiftmodule": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/SplitType~partial.swiftmodule",
+    "swift-dependencies": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/SplitType.swiftdeps",
+    "diagnostics": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/SplitType.dia"
+  },
+  "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/TesseraConfig.swift": {
+    "dependencies": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TesseraConfig.d",
+    "object": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TesseraConfig.swift.o",
+    "swiftmodule": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TesseraConfig~partial.swiftmodule",
+    "swift-dependencies": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TesseraConfig.swiftdeps",
+    "diagnostics": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TesseraConfig.dia"
+  },
+  "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/TreeNode.swift": {
+    "dependencies": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TreeNode.d",
+    "object": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TreeNode.swift.o",
+    "swiftmodule": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TreeNode~partial.swiftmodule",
+    "swift-dependencies": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TreeNode.swiftdeps",
+    "diagnostics": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TreeNode.dia"
+  },
+  "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/Window.swift": {
+    "dependencies": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Window.d",
+    "object": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Window.swift.o",
+    "swiftmodule": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Window~partial.swiftmodule",
+    "swift-dependencies": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Window.swiftdeps",
+    "diagnostics": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Window.dia"
+  },
+  "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/Workspace.swift": {
+    "dependencies": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Workspace.d",
+    "object": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Workspace.swift.o",
+    "swiftmodule": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Workspace~partial.swiftmodule",
+    "swift-dependencies": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Workspace.swiftdeps",
+    "diagnostics": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Workspace.dia"
+  },
+  "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/TesseraKit.swift": {
+    "dependencies": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TesseraKit.d",
+    "object": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TesseraKit.swift.o",
+    "swiftmodule": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TesseraKit~partial.swiftmodule",
+    "swift-dependencies": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TesseraKit.swiftdeps",
+    "diagnostics": "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TesseraKit.dia"
+  }
+}

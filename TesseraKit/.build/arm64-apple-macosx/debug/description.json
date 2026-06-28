@@ -1,0 +1,517 @@
+{
+  "builtTestProducts" : [
+
+  ],
+  "copyCommands" : {
+
+  },
+  "explicitTargetDependencyImportCheckingMode" : {
+    "none" : {
+
+    }
+  },
+  "generatedSourceTargetSet" : [
+
+  ],
+  "pluginDescriptions" : [
+
+  ],
+  "swiftCommands" : {
+    "C.TesseraKit-arm64-apple-macosx-debug.module" : {
+      "executable" : "/Library/Developer/CommandLineTools/usr/bin/swiftc",
+      "fileList" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/sources",
+      "importPath" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/Rect.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/SplitType.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/TesseraConfig.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/TreeNode.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/Window.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/Workspace.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/TesseraKit.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "TesseraKit",
+      "moduleOutputPath" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/Modules/TesseraKit.swiftmodule",
+      "objects" : [
+        "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Rect.swift.o",
+        "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/SplitType.swift.o",
+        "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TesseraConfig.swift.o",
+        "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TreeNode.swift.o",
+        "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Window.swift.o",
+        "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Workspace.swift.o",
+        "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TesseraKit.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx10.13",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-j18",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-emit-objc-header",
+        "-emit-objc-header-path",
+        "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/include/TesseraKit-Swift.h",
+        "-swift-version",
+        "6",
+        "-I",
+        "/Library/Developer/CommandLineTools/Library/Developer/Frameworks",
+        "-L",
+        "/Library/Developer/CommandLineTools/Library/Developer/Frameworks",
+        "-plugin-path",
+        "/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "tesserakit"
+      ],
+      "outputFileMapPath" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Rect.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/SplitType.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TesseraConfig.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TreeNode.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Window.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Workspace.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TesseraKit.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/Modules/TesseraKit.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/Rect.swift",
+        "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/SplitType.swift",
+        "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/TesseraConfig.swift",
+        "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/TreeNode.swift",
+        "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/Window.swift",
+        "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/Workspace.swift",
+        "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/TesseraKit.swift"
+      ],
+      "tempsPath" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build",
+      "wholeModuleOptimization" : false
+    },
+    "C.TesseraTests-arm64-apple-macosx-debug.module" : {
+      "executable" : "/Library/Developer/CommandLineTools/usr/bin/swiftc",
+      "fileList" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests.build/sources",
+      "importPath" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraTests/main.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/Modules/TesseraKit.swiftmodule"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests.build/sources"
+        }
+      ],
+      "isLibrary" : false,
+      "moduleName" : "TesseraTests",
+      "moduleOutputPath" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/Modules/TesseraTests.swiftmodule",
+      "objects" : [
+        "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests.build/main.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx10.13",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-j18",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-Xfrontend",
+        "-entry-point-function-name",
+        "-Xfrontend",
+        "TesseraTests_main",
+        "-swift-version",
+        "6",
+        "-I",
+        "/Library/Developer/CommandLineTools/Library/Developer/Frameworks",
+        "-L",
+        "/Library/Developer/CommandLineTools/Library/Developer/Frameworks",
+        "-plugin-path",
+        "/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "tesserakit"
+      ],
+      "outputFileMapPath" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests.build/main.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/Modules/TesseraTests.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraTests/main.swift"
+      ],
+      "tempsPath" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests.build",
+      "wholeModuleOptimization" : false
+    }
+  },
+  "swiftFrontendCommands" : {
+
+  },
+  "swiftTargetScanArgs" : {
+    "TesseraKit" : [
+      "/Library/Developer/CommandLineTools/usr/bin/swiftc",
+      "-module-name",
+      "TesseraKit",
+      "-package-name",
+      "tesserakit",
+      "-c",
+      "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/Rect.swift",
+      "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/SplitType.swift",
+      "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/TesseraConfig.swift",
+      "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/TreeNode.swift",
+      "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/Window.swift",
+      "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/Workspace.swift",
+      "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/TesseraKit.swift",
+      "-I",
+      "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx10.13",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-j18",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-emit-objc-header",
+      "-emit-objc-header-path",
+      "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/include/TesseraKit-Swift.h",
+      "-swift-version",
+      "6",
+      "-I",
+      "/Library/Developer/CommandLineTools/Library/Developer/Frameworks",
+      "-L",
+      "/Library/Developer/CommandLineTools/Library/Developer/Frameworks",
+      "-plugin-path",
+      "/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "tesserakit",
+      "-driver-use-frontend-path",
+      "/Library/Developer/CommandLineTools/usr/bin/swiftc"
+    ],
+    "TesseraTests" : [
+      "/Library/Developer/CommandLineTools/usr/bin/swiftc",
+      "-module-name",
+      "TesseraTests",
+      "-package-name",
+      "tesserakit",
+      "-c",
+      "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraTests/main.swift",
+      "-I",
+      "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx10.13",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-j18",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-Xfrontend",
+      "-entry-point-function-name",
+      "-Xfrontend",
+      "TesseraTests_main",
+      "-swift-version",
+      "6",
+      "-I",
+      "/Library/Developer/CommandLineTools/Library/Developer/Frameworks",
+      "-L",
+      "/Library/Developer/CommandLineTools/Library/Developer/Frameworks",
+      "-plugin-path",
+      "/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "tesserakit",
+      "-driver-use-frontend-path",
+      "/Library/Developer/CommandLineTools/usr/bin/swiftc"
+    ]
+  },
+  "targetDependencyMap" : {
+    "TesseraKit" : [
+
+    ],
+    "TesseraTests" : [
+      "TesseraKit"
+    ]
+  },
+  "testDiscoveryCommands" : {
+
+  },
+  "testEntryPointCommands" : {
+
+  },
+  "traitConfiguration" : {
+    "default" : {
+
+    }
+  },
+  "writeCommands" : {
+    "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/Rect.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/SplitType.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/TesseraConfig.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/TreeNode.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/Window.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/Core/Workspace.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraKit/TesseraKit.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/sources"
+    },
+    "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests-entitlement.plist" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<entitlement-plist>"
+        },
+        {
+          "kind" : "virtual",
+          "name" : "<com.apple.security.get-task-allow>"
+        }
+      ],
+      "outputFilePath" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests-entitlement.plist"
+    },
+    "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/Sources/TesseraTests/main.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests.build/sources"
+    },
+    "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests.product/Objects.LinkFileList" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<link-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Rect.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/SplitType.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TesseraConfig.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TesseraKit.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/TreeNode.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Window.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/Workspace.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests.build/main.swift.o"
+        }
+      ],
+      "outputFilePath" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraTests.product/Objects.LinkFileList"
+    },
+    "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt" : {
+      "alwaysOutOfDate" : true,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<swift-get-version>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Library/Developer/CommandLineTools/usr/bin/swiftc"
+        }
+      ],
+      "outputFilePath" : "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt"
+    }
+  }
+}

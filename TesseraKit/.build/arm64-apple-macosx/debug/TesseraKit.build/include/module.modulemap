@@ -1,0 +1,3 @@
+module TesseraKit {
+    header "/Users/spidey/Projects/tessera/TesseraKit/.build/arm64-apple-macosx/debug/TesseraKit.build/include/TesseraKit-Swift.h"
+}
