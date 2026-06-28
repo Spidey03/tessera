@@ -6,7 +6,7 @@ public struct TesseraConfig: Sendable {
 
     public init(
         gapSize: Double = 8,
-        outerGap: Double = 16,
+        outerGap: Double = 4,
         initialSplit: SplitType = .vertical,
         newWindowFocus: Bool = false
     ) {
