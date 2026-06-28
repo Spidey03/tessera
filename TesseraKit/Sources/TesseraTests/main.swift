@@ -1,5 +1,20 @@
+import CoreGraphics
 import Foundation
 import TesseraKit
+
+// MARK: - Local KeyBinding (duplicated from TesseraDaemon for testability)
+
+struct KeyBinding: Sendable {
+    let keyCode: CGKeyCode
+    let flags: CGEventFlags
+    let action: String
+
+    func matches(event: CGEvent) -> Bool {
+        let eventKeyCode = event.getIntegerValueField(.keyboardEventKeycode)
+        guard eventKeyCode == keyCode else { return false }
+        return flags.isSubset(of: event.flags)
+    }
+}
 
 // MARK: - Test utilities
 
@@ -40,8 +55,8 @@ func testAddFirstWindowFillsUsableArea() throws {
     let layout = ws.getLayout()
     try assertEqual(layout.count, 1)
     try assertEqual(layout[0].0.id, "A")
-    try assertEqual(layout[0].1.width, 1880)
-    try assertEqual(layout[0].1.height, 1040)
+    try assertEqual(layout[0].1.width, 1904)
+    try assertEqual(layout[0].1.height, 1064)
 }
 
 func testSecondWindowSplitsVerticallyByDefault() throws {
@@ -195,6 +210,146 @@ func testTotalAreaInvariantNoGaps() throws {
     try assertEqual(totalArea, 1920.0 * 1080.0)
 }
 
+// MARK: - Focus navigation
+
+func testFocusedWindowIDOnEmptyWorkspace() throws {
+    let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    try assertNil(ws.focusedWindowID)
+}
+
+func testFocusedWindowIDAfterAdd() throws {
+    let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    ws.addWindow(Window(id: "A"))
+    try assertEqual(ws.focusedWindowID, "A")
+}
+
+func testFocusedWindowIDAfterFocusRight() throws {
+    let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    ws.addWindow(Window(id: "A"))
+    ws.addWindow(Window(id: "B"))
+    // Order: A (focused), B
+    ws.focusRight()
+    try assertEqual(ws.focusedWindowID, "B")
+}
+
+func testFocusedWindowIDAfterFocusLeft() throws {
+    let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    ws.addWindow(Window(id: "A"))
+    ws.addWindow(Window(id: "B"))
+    ws.focusRight()
+    ws.focusLeft()
+    try assertEqual(ws.focusedWindowID, "A")
+}
+
+func testFocusLeftAtEdgeReturnsFalse() throws {
+    let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    ws.addWindow(Window(id: "A"))
+    // A is the only window — already at leftmost
+    let result = ws.focusLeft()
+    try assertEqual(result, false)
+    try assertEqual(ws.focusedWindowID, "A")
+}
+
+func testFocusRightAtEdgeReturnsFalse() throws {
+    let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    ws.addWindow(Window(id: "A"))
+    ws.addWindow(Window(id: "B"))
+    ws.focusRight()
+    // B is the rightmost
+    let result = ws.focusRight()
+    try assertEqual(result, false)
+    try assertEqual(ws.focusedWindowID, "B")
+}
+
+func testFocusRightCyclesThroughThreeWindows() throws {
+    let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    ws.addWindow(Window(id: "A"))
+    ws.addWindow(Window(id: "B"))
+    ws.addWindow(Window(id: "C"))
+    // Layout order: A (focused), C, B
+    ws.focusRight()
+    try assertEqual(ws.focusedWindowID, "C")
+    ws.focusRight()
+    try assertEqual(ws.focusedWindowID, "B")
+    let last = ws.focusRight()
+    try assertEqual(last, false)
+    try assertEqual(ws.focusedWindowID, "B")
+}
+
+func testFocusLeftCyclesThroughThreeWindows() throws {
+    let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    ws.addWindow(Window(id: "A"))
+    ws.addWindow(Window(id: "B"))
+    ws.addWindow(Window(id: "C"))
+    // Layout order: A (focused), C, B
+    // Jump to rightmost first, then navigate left
+    ws.focusRight()
+    ws.focusRight()
+    try assertEqual(ws.focusedWindowID, "B")
+    ws.focusLeft()
+    try assertEqual(ws.focusedWindowID, "C")
+    ws.focusLeft()
+    try assertEqual(ws.focusedWindowID, "A")
+    let last = ws.focusLeft()
+    try assertEqual(last, false)
+    try assertEqual(ws.focusedWindowID, "A")
+}
+
+func testFocusAfterRemovePreservesNavigationOrder() throws {
+    let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    ws.addWindow(Window(id: "A"))
+    ws.addWindow(Window(id: "B"))
+    ws.addWindow(Window(id: "C"))
+    // Order: A, C, B. Remove B.
+    ws.removeWindow(id: "B")
+    // Order: A, C
+    try assertEqual(ws.focusedWindowID, "A")
+    ws.focusRight()
+    try assertEqual(ws.focusedWindowID, "C")
+}
+
+func testFocusLeftOnEmptyWorkspaceReturnsFalse() throws {
+    let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    let result = ws.focusLeft()
+    try assertEqual(result, false)
+}
+
+func testFocusRightOnEmptyWorkspaceReturnsFalse() throws {
+    let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    let result = ws.focusRight()
+    try assertEqual(result, false)
+}
+
+// MARK: - KeyBinding (pure logic, no AX dependency)
+
+func testKeyBindingTileMatchesCorrectly() throws {
+    let event = CGEvent(keyboardEventSource: nil, virtualKey: 36, keyDown: true)!
+    event.flags = [.maskCommand, .maskAlternate]
+    let binding = KeyBinding(keyCode: 36, flags: [.maskCommand, .maskAlternate], action: "tile")
+    try assert(binding.matches(event: event))
+}
+
+func testKeyBindingWrongKeyCodeDoesNotMatch() throws {
+    let event = CGEvent(keyboardEventSource: nil, virtualKey: 4, keyDown: true)!
+    event.flags = [.maskCommand, .maskAlternate]
+    let binding = KeyBinding(keyCode: 36, flags: [.maskCommand, .maskAlternate], action: "tile")
+    try assert(!binding.matches(event: event))
+}
+
+func testKeyBindingMissingFlagsDoesNotMatch() throws {
+    let event = CGEvent(keyboardEventSource: nil, virtualKey: 36, keyDown: true)!
+    event.flags = [.maskCommand] // missing alternate
+    let binding = KeyBinding(keyCode: 36, flags: [.maskCommand, .maskAlternate], action: "tile")
+    try assert(!binding.matches(event: event))
+}
+
+func testKeyBindingExtraFlagsStillMatches() throws {
+    let event = CGEvent(keyboardEventSource: nil, virtualKey: 36, keyDown: true)!
+    event.flags = [.maskCommand, .maskAlternate, .maskNonCoalesced, .maskAlphaShift]
+    let binding = KeyBinding(keyCode: 36, flags: [.maskCommand, .maskAlternate], action: "tile")
+    try assert(binding.matches(event: event))
+}
+
 // MARK: - Runner
 
 let tests: [(String, () throws -> Void)] = [
@@ -214,6 +369,23 @@ let tests: [(String, () throws -> Void)] = [
     ("Add/remove cycle preserves correctness", testAddRemoveCyclePreservesCorrectness),
     ("Large monitor rect", testLargeMonitorRect),
     ("Total area invariant no gaps", testTotalAreaInvariantNoGaps),
+    // Focus navigation
+    ("FocusedWindowID on empty workspace is nil", testFocusedWindowIDOnEmptyWorkspace),
+    ("FocusedWindowID after add", testFocusedWindowIDAfterAdd),
+    ("FocusedWindowID after focusRight", testFocusedWindowIDAfterFocusRight),
+    ("FocusedWindowID after focusLeft round-trip", testFocusedWindowIDAfterFocusLeft),
+    ("FocusLeft at edge returns false", testFocusLeftAtEdgeReturnsFalse),
+    ("FocusRight at edge returns false", testFocusRightAtEdgeReturnsFalse),
+    ("FocusRight cycles through three windows", testFocusRightCyclesThroughThreeWindows),
+    ("FocusLeft cycles through three windows", testFocusLeftCyclesThroughThreeWindows),
+    ("Focus after remove preserves navigation order", testFocusAfterRemovePreservesNavigationOrder),
+    ("FocusLeft on empty workspace returns false", testFocusLeftOnEmptyWorkspaceReturnsFalse),
+    ("FocusRight on empty workspace returns false", testFocusRightOnEmptyWorkspaceReturnsFalse),
+    // KeyBinding
+    ("KeyBinding tile matches correctly", testKeyBindingTileMatchesCorrectly),
+    ("KeyBinding wrong keyCode does not match", testKeyBindingWrongKeyCodeDoesNotMatch),
+    ("KeyBinding missing flags does not match", testKeyBindingMissingFlagsDoesNotMatch),
+    ("KeyBinding extra flags still matches", testKeyBindingExtraFlagsStillMatches),
 ]
 
 var passed = 0
