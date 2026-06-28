@@ -1,0 +1,17 @@
+.build/
+.build.*
+*.build/
+*.build.*
+
+__pycache__/
+*.pyc
+*.pyo
+
+.pytest_cache/
+venv/
+.venv/
+
+.env
+*.swp
+*.swo
+.DS_Store
