@@ -99,6 +99,31 @@ public final class Workspace: @unchecked Sendable {
         return result
     }
 
+    // MARK: - Focus navigation
+
+    public var focusedWindowID: String? {
+        guard let root else { return nil }
+        return findFocusedLeaf(root).window?.id
+    }
+
+    @discardableResult
+    public func focusLeft() -> Bool {
+        let windows = getLayout()
+        guard let currentID = focusedWindowID,
+              let idx = windows.firstIndex(where: { $0.0.id == currentID }),
+              idx > 0 else { return false }
+        return focusWindow(id: windows[idx - 1].0.id)
+    }
+
+    @discardableResult
+    public func focusRight() -> Bool {
+        let windows = getLayout()
+        guard let currentID = focusedWindowID,
+              let idx = windows.firstIndex(where: { $0.0.id == currentID }),
+              idx < windows.count - 1 else { return false }
+        return focusWindow(id: windows[idx + 1].0.id)
+    }
+
     // MARK: - Internal
 
     public func findFocusedLeaf(_ node: TreeNode) -> TreeNode {

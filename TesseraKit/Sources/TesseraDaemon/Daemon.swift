@@ -1,6 +1,7 @@
 import ApplicationServices
 import CoreGraphics
 import Foundation
+import TesseraKit
 import TesseraSystem
 
 private func describeFlags(_ f: CGEventFlags) -> String {
@@ -24,6 +25,11 @@ final class Daemon {
     let tiler: Tiler
     let bindings: [KeyBinding]
     let observer: WindowObserver
+
+    /// Persistent BSP workspace state across operations
+    var currentWorkspace: Workspace?
+    /// Persistent window mapping across operations
+    var currentMapper: WindowMapper?
 
     init(tiler: Tiler, bindings: [KeyBinding]) {
         self.tiler = tiler
@@ -69,16 +75,71 @@ final class Daemon {
         print("AX observer started.")
 
         print()
-        print("Tessera daemon running. Press ⌘⌥⏎ to tile, ⌘⌥⇧Q to quit.")
+        print("Tessera daemon running.")
+        print("  ⌘⌥⏎  — tile all windows")
+        print("  ⌘⌥H/J — focus left/right")
+        print("  ⌘⌥K/L — focus left/right")
+        print("  ⌘⌥W  — remove focused window")
+        print("  ⌘⌥⇧Q — quit")
         print("Listening for keyDown events...")
 
         CFRunLoopRun()
     }
 
-    /// Tile while suppressing AX notifications to avoid loops
+    /// Tile while suppressing AX notifications to avoid loops.
+    /// Saves workspace + mapper state for subsequent focus/remove operations.
     func tileWithSuppression() {
         observer.isSuppressed = true
-        tiler.tileAllWindows()
+        let result = tiler.tileAllWindows()
+        if let (ws, mapper) = result {
+            currentWorkspace = ws
+            currentMapper = mapper
+        }
+        observer.isSuppressed = false
+    }
+
+    // MARK: - Focus navigation
+
+    func focusLeft() {
+        guard let ws = currentWorkspace else { print("[focus] no workspace — tile first"); return }
+        guard let mapper = currentMapper else { print("[focus] no mapper — tile first"); return }
+        guard ws.focusLeft() else { print("[focus] already at leftmost"); return }
+        guard let focusedID = ws.focusedWindowID else { print("[focus] no focused window"); return }
+        if mapper.focusWindow(id: focusedID) {
+            print("[focus] ← left")
+        } else {
+            print("[focus] failed to focus window")
+        }
+    }
+
+    func focusRight() {
+        guard let ws = currentWorkspace else { print("[focus] no workspace — tile first"); return }
+        guard let mapper = currentMapper else { print("[focus] no mapper — tile first"); return }
+        guard ws.focusRight() else { print("[focus] already at rightmost"); return }
+        guard let focusedID = ws.focusedWindowID else { print("[focus] no focused window"); return }
+        if mapper.focusWindow(id: focusedID) {
+            print("[focus] → right")
+        } else {
+            print("[focus] failed to focus window")
+        }
+    }
+
+    func removeFocused() {
+        guard let ws = currentWorkspace else { print("[remove] no workspace — tile first"); return }
+        guard var mapper = currentMapper else { print("[remove] no mapper — tile first"); return }
+        guard let focusedID = ws.focusedWindowID else { print("[remove] no focused window"); return }
+        print("[remove] removing \(focusedID)")
+        observer.isSuppressed = true
+        ws.removeWindow(id: focusedID)
+        let layout = ws.getLayout()
+        if layout.isEmpty {
+            print("[remove] no windows left")
+            currentWorkspace = nil
+            currentMapper = nil
+        } else {
+            mapper.applyLayout(layout)
+            currentMapper = mapper
+        }
         observer.isSuppressed = false
     }
 
@@ -164,6 +225,24 @@ private let eventTapCallback: CGEventTapCallBack = { proxy, type, event, userInf
             }
             CFRunLoopWakeUp(CFRunLoopGetMain())
             print("[event] swallowed (tile)")
+            return nil
+        case "focusLeft":
+            CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue) {
+                daemon.focusLeft()
+            }
+            CFRunLoopWakeUp(CFRunLoopGetMain())
+            return nil
+        case "focusRight":
+            CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue) {
+                daemon.focusRight()
+            }
+            CFRunLoopWakeUp(CFRunLoopGetMain())
+            return nil
+        case "remove":
+            CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue) {
+                daemon.removeFocused()
+            }
+            CFRunLoopWakeUp(CFRunLoopGetMain())
             return nil
         case "quit":
             print("[quit] Quitting Tessera daemon.")

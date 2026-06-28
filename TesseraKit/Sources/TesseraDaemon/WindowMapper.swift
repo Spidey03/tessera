@@ -1,3 +1,4 @@
+import AppKit
 import ApplicationServices
 import CoreGraphics
 import TesseraKit
@@ -10,6 +11,21 @@ public struct WindowMapper {
         for win in realWindows {
             mapping[win.id] = win
         }
+    }
+
+    public func focusWindow(id: String) -> Bool {
+        guard let macWin = mapping[id] else { return false }
+        let appElement = AXUIElementCreateApplication(macWin.appPID)
+        // Set the focused window on the app element (window-level kAXFocusedAttribute is read-only)
+        AXUIElementSetAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, macWin.windowRef)
+        // Activate the app to bring it forward
+        NSRunningApplication(processIdentifier: macWin.appPID)?.activate()
+        print("[focus] set focused window: \(macWin.appName) \"\(macWin.title)\"")
+        return true
+    }
+
+    public var focusedWindow: MacWindow? {
+        mapping.values.first { $0.isGloballyFocused }
     }
 
     public var pureWindows: [Window] {

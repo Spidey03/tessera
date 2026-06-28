@@ -5,12 +5,13 @@ import TesseraSystem
 struct Tiler {
     let config: TesseraConfig
 
-    func tileAllWindows() {
+    /// Returns the workspace + mapper state for subsequent focus/remove operations.
+    @discardableResult
+    func tileAllWindows() -> (workspace: Workspace, mapper: WindowMapper)? {
         let allWindows = WindowDiscovery.allWindows()
         let screenFrame = screenCGRect()
         let windows = allWindows.filter { w in
             guard !w.isMinimized else { return false }
-            // Skip desktop background windows (fullscreen, no title, position 0,0)
             if w.title.isEmpty && w.position == .zero && w.size == screenFrame.size { return false }
             return true
         }
@@ -23,7 +24,7 @@ struct Tiler {
 
         guard !windows.isEmpty else {
             print("[tiler] no windows to tile — skipping")
-            return
+            return nil
         }
 
         let screenRect = screenRect()
@@ -46,6 +47,7 @@ struct Tiler {
 
         mapper.applyLayout(layout)
         print("[tiler] layout applied ✓")
+        return (workspace, mapper)
     }
 
     private func screenCGRect() -> CGRect {

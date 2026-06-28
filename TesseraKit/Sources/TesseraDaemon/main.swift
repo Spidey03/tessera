@@ -13,6 +13,6 @@ print("""
 let config = TesseraConfig()
 let tiler = Tiler(config: config)
 
-let bindings: [KeyBinding] = [.tile, .quit]
+let bindings: [KeyBinding] = [.tile, .focusLeft, .focusRight, .focusUp, .focusDown, .remove, .quit]
 let daemon = Daemon(tiler: tiler, bindings: bindings)
 daemon.run()
