@@ -23,14 +23,15 @@ public final class Workspace: @unchecked Sendable {
             return
         }
 
-        let focused = findFocusedLeaf(currentRoot)
-        let oldWindow = focused.window!
-        let oldRect = focused.rect
+        let target = findLargestLeaf(currentRoot)
+        let oldWindow = target.window!
+        let oldRect = target.rect
 
+        let splitDir: SplitType = target.rect.width >= target.rect.height ? .vertical : .horizontal
         let existingRect: Rect
         let newRect: Rect
 
-        if nextSplit == .vertical {
+        if splitDir == .vertical {
             let split = oldRect.splitVertical()
             existingRect = split.left
             newRect = split.right
@@ -40,18 +41,21 @@ public final class Workspace: @unchecked Sendable {
             newRect = split.bottom
         }
 
+        let existingInset = existingRect.inset(by: gap)
+        let newInset = newRect.inset(by: gap)
+
         var updatedExisting = oldWindow
-        updatedExisting.rect = existingRect.inset(by: gap)
+        updatedExisting.rect = existingInset
 
         var updatedNew = window
-        updatedNew.rect = newRect.inset(by: gap)
+        updatedNew.rect = newInset
 
-        focused.window = nil
-        focused.splitType = nextSplit
-        focused.leftChild = TreeNode(rect: existingRect, window: updatedExisting, isFocused: !config.newWindowFocus)
-        focused.rightChild = TreeNode(rect: newRect, window: updatedNew, isFocused: config.newWindowFocus)
+        print("[bsp] add \(window.id) — split=\(splitDir) oldRect=\(oldRect) existing=\(existingRect)→\(existingInset) new=\(newRect)→\(newInset)")
 
-        nextSplit = nextSplit.alternated()
+        target.window = nil
+        target.splitType = splitDir
+        target.leftChild = TreeNode(rect: existingRect, window: updatedExisting, isFocused: !config.newWindowFocus)
+        target.rightChild = TreeNode(rect: newRect, window: updatedNew, isFocused: config.newWindowFocus)
     }
 
     @discardableResult
@@ -131,6 +135,15 @@ public final class Workspace: @unchecked Sendable {
         let candidate = findFocusedLeaf(node.leftChild!)
         if candidate.isFocused { return candidate }
         return findFocusedLeaf(node.rightChild!)
+    }
+
+    public func findLargestLeaf(_ node: TreeNode) -> TreeNode {
+        guard !node.isLeaf else { return node }
+        let left = findLargestLeaf(node.leftChild!)
+        let right = findLargestLeaf(node.rightChild!)
+        let leftArea = left.rect.width * left.rect.height
+        let rightArea = right.rect.width * right.rect.height
+        return leftArea >= rightArea ? left : right
     }
 
     private func findPathToLeaf(_ node: TreeNode?, windowId: String, parent: TreeNode? = nil) -> (target: TreeNode, parent: TreeNode?)? {

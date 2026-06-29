@@ -21,7 +21,7 @@ private func describeFlags(_ f: CGEventFlags) -> String {
     return parts.joined(separator: "+")
 }
 
-final class Daemon {
+final class Daemon: @unchecked Sendable {
     let tiler: Tiler
     let bindings: [KeyBinding]
     let observer: WindowObserver
@@ -30,6 +30,10 @@ final class Daemon {
     var currentWorkspace: Workspace?
     /// Persistent window mapping across operations
     var currentMapper: WindowMapper?
+    /// Last known window count for polling-based destroy detection
+    var lastKnownWindowCount: Int = 0
+    /// Periodic timer for window destroy detection
+    var pollTimer: Timer?
 
     init(tiler: Tiler, bindings: [KeyBinding]) {
         self.tiler = tiler
@@ -74,6 +78,9 @@ final class Daemon {
         observer.start()
         print("AX observer started.")
 
+        startPolling()
+        print("Poll timer started (1s interval).")
+
         print()
         print("Tessera daemon running.")
         print("  ⌘⌥⏎  — tile all windows")
@@ -96,6 +103,45 @@ final class Daemon {
             currentMapper = mapper
         }
         observer.isSuppressed = false
+        updateLastKnownCount()
+    }
+
+    // MARK: - Polling for window destroy detection
+
+    func startPolling() {
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.pollChanges()
+        }
+    }
+
+    func stopPolling() {
+        pollTimer?.invalidate()
+        pollTimer = nil
+    }
+
+    private func pollChanges() {
+        guard !observer.isSuppressed else { return }
+
+        let allWindows = WindowDiscovery.allWindows()
+        let windows = tiler.filterWindows(allWindows)
+        let currentCount = windows.count
+
+        if currentCount < lastKnownWindowCount {
+            print("[poll] detected window removal (count: \(lastKnownWindowCount) → \(currentCount))")
+            tileWithSuppression()
+        }
+
+        lastKnownWindowCount = currentCount
+    }
+
+    private func updateLastKnownCount() {
+        let allWindows = WindowDiscovery.allWindows()
+        let windows = tiler.filterWindows(allWindows)
+        lastKnownWindowCount = windows.count
+    }
+
+    deinit {
+        stopPolling()
     }
 
     // MARK: - Focus navigation

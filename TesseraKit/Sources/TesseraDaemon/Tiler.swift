@@ -9,12 +9,7 @@ struct Tiler {
     @discardableResult
     func tileAllWindows() -> (workspace: Workspace, mapper: WindowMapper)? {
         let allWindows = WindowDiscovery.allWindows()
-        let screenFrame = screenCGRect()
-        let windows = allWindows.filter { w in
-            guard !w.isMinimized else { return false }
-            if w.title.isEmpty && w.position == .zero && w.size == screenFrame.size { return false }
-            return true
-        }
+        let windows = filterWindows(allWindows)
 
         print("[tiler] discovered \(allWindows.count) windows (\(windows.count) non-minimized + filtered)")
         for w in allWindows {
@@ -50,7 +45,16 @@ struct Tiler {
         return (workspace, mapper)
     }
 
-    private func screenCGRect() -> CGRect {
+    func filterWindows(_ allWindows: [MacWindow]) -> [MacWindow] {
+        let screenFrame = screenCGRect()
+        return allWindows.filter { w in
+            guard !w.isMinimized else { return false }
+            if w.title.isEmpty && w.position == .zero && w.size == screenFrame.size { return false }
+            return true
+        }
+    }
+
+    func screenCGRect() -> CGRect {
         NSScreen.main?.frame ?? CGRect(x: 0, y: 0, width: 1920, height: 1080)
     }
 

@@ -49,13 +49,11 @@ public struct WindowMapper {
             }
             let cgRect = CGRect(x: rect.x, y: rect.y, width: rect.width, height: rect.height)
             print("[mapper]   \(macWin.appName): \"\(macWin.title)\" → pos(\(Int(rect.x)),\(Int(rect.y))) size(\(Int(rect.width))x\(Int(rect.height)))")
-            let posOK = macWin.setPosition(cgRect.origin)
-            let szOK  = macWin.setSize(cgRect.size)
-            if posOK && szOK {
+            if macWin.setFrame(cgRect) {
                 mapping[pureWin.id] = macWin
                 moved += 1
             } else {
-                print("[mapper]   FAILED: \(macWin.appName) — pos=\(posOK) size=\(szOK)")
+                print("[mapper]   FAILED: \(macWin.appName) — setFrame returned false")
                 failed += 1
             }
         }

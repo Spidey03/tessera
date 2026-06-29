@@ -10,9 +10,8 @@ print("""
 ╚══════════════════════════════════════════╝
 """)
 
-let config = TesseraConfig()
-let tiler = Tiler(config: config)
-
-let bindings: [KeyBinding] = [.tile, .focusLeft, .focusRight, .focusUp, .focusDown, .remove, .quit]
-let daemon = Daemon(tiler: tiler, bindings: bindings)
+ConfigLoader.ensureConfigDir()
+let loaded = ConfigLoader.load()
+let tiler = Tiler(config: loaded.tesseraConfig)
+let daemon = Daemon(tiler: tiler, bindings: loaded.bindings)
 daemon.run()

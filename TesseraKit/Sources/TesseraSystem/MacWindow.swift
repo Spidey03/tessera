@@ -38,11 +38,8 @@ public struct MacWindow {
 
     @discardableResult
     public mutating func setFrame(_ frame: CGRect) -> Bool {
-        // Set size first, then position — some apps auto-resize on position
-        // change, so setting size first avoids that race.
-        let sizeOK = setSize(frame.size)
-        let posOK = setPosition(frame.origin)
-        return sizeOK && posOK
+        guard setSize(frame.size) else { return false }
+        return setPosition(frame.origin)
     }
 }
 
