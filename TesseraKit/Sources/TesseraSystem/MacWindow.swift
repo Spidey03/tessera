@@ -5,7 +5,9 @@ public struct MacWindow {
     public let windowRef: AXUIElement
     public let appPID: pid_t
     public let appName: String
+    public let bundleID: String?
     public let title: String
+    public let role: String?
     public var position: CGPoint
     public var size: CGSize
     public let isFocused: Bool
@@ -40,6 +42,15 @@ public struct MacWindow {
     public mutating func setFrame(_ frame: CGRect) -> Bool {
         guard setSize(frame.size) else { return false }
         return setPosition(frame.origin)
+    }
+
+    public func actualSize() -> CGSize? {
+        var raw: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(windowRef, kAXSizeAttribute as CFString, &raw)
+        guard result == .success, let val = raw else { return nil }
+        var size = CGSize.zero
+        guard AXValueGetValue(val as! AXValue, .cgSize, &size) else { return nil }
+        return size
     }
 }
 

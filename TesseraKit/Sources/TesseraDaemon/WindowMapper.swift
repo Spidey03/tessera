@@ -40,24 +40,80 @@ public struct WindowMapper {
             .map { Window(id: $0.id) }
     }
 
-    public mutating func applyLayout(_ layout: [(Window, Rect)]) {
-        var moved = 0, failed = 0
+    @discardableResult
+    public mutating func applyLayout(_ layout: [(Window, Rect)]) -> Set<String> {
+        let tolerance: CGFloat = 8
+        var moved = 0
+        var floatedIDs: Set<String> = []
         for (pureWin, rect) in layout {
             guard var macWin = mapping[pureWin.id] else {
                 print("[mapper]   SKIP: \(pureWin.id) not found in mapping")
                 continue
             }
             let cgRect = CGRect(x: rect.x, y: rect.y, width: rect.width, height: rect.height)
-            print("[mapper]   \(macWin.appName): \"\(macWin.title)\" → pos(\(Int(rect.x)),\(Int(rect.y))) size(\(Int(rect.width))x\(Int(rect.height)))")
-            if macWin.setFrame(cgRect) {
+
+            // Request resize — app may or may not honor it
+            macWin.setSize(cgRect.size)
+
+            // Read back what the app actually accepted
+            let actual = macWin.actualSize()
+            let dx = actual.map { abs($0.width - cgRect.width) } ?? 0
+            let dy = actual.map { abs($0.height - cgRect.height) } ?? 0
+            let fits = dx <= tolerance && dy <= tolerance
+
+            let position: CGPoint
+            if !fits {
+                let actualW = actual?.width ?? cgRect.width
+                let actualH = actual?.height ?? cgRect.height
+                let dW = abs(actualW - cgRect.width)
+                let dH = abs(actualH - cgRect.height)
+                let isMismatch = dW > 50 || dH > 50
+
+                if isMismatch {
+                    floatedIDs.insert(pureWin.id)
+                    position = screenCenter(size: CGSize(width: actualW, height: actualH))
+                    print("[mapper]   \(macWin.appName): \"\(macWin.title)\" → auto-floated (mismatch \(Int(max(dW, dH)))px) at (\(Int(position.x)),\(Int(position.y)))")
+                } else {
+                    position = cgRect.origin
+                    print("[mapper]   WARNING: \(macWin.appName) \"\(macWin.title)\" — requested \(Int(cgRect.width))x\(Int(cgRect.height)), got \(Int(actualW))x\(Int(actualH)); placing at tile position")
+                }
+            } else {
+                position = cgRect.origin
+                print("[mapper]   \(macWin.appName): \"\(macWin.title)\" → pos(\(Int(rect.x)),\(Int(rect.y))) size(\(Int(rect.width))x\(Int(rect.height)))")
+            }
+
+            if macWin.setPosition(position) {
                 mapping[pureWin.id] = macWin
                 moved += 1
-            } else {
-                print("[mapper]   FAILED: \(macWin.appName) — setFrame returned false")
-                failed += 1
             }
         }
-        print("[mapper] layout applied: \(moved) moved, \(failed) failed")
+        print("[mapper] layout applied: \(moved) moved")
+        if !floatedIDs.isEmpty {
+            print("[mapper] floated \(floatedIDs.count) window(s)")
+        }
+        return floatedIDs
+    }
+
+    @discardableResult
+    public mutating func centerOnScreen(id: String) -> Bool {
+        guard var macWin = mapping[id] else { return false }
+        let actual = macWin.actualSize() ?? macWin.size
+        let pos = screenCenter(size: actual)
+        if macWin.setPosition(pos) {
+            mapping[id] = macWin
+            print("[mapper]   \(macWin.appName): \"\(macWin.title)\" → centered on screen at (\(Int(pos.x)),\(Int(pos.y)))")
+            return true
+        }
+        return false
+    }
+
+    private func screenCenter(size: CGSize) -> CGPoint {
+        let visibleFrame = NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 33, width: 1512, height: 944)
+        let screenFrame = NSScreen.main?.frame ?? CGRect(x: 0, y: 0, width: 1512, height: 982)
+        let topInset = round(screenFrame.height - visibleFrame.origin.y - visibleFrame.height)
+        let cx = visibleFrame.origin.x + (visibleFrame.width - size.width) / 2
+        let cy = topInset + (visibleFrame.height - size.height) / 2
+        return CGPoint(x: max(cx, 0), y: max(cy, topInset))
     }
 }
 

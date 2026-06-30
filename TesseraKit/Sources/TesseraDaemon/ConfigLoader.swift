@@ -13,6 +13,7 @@ struct TesseraConfigFile: Codable {
     var gapSize: Double?
     var outerGap: Double?
     var newWindowFocus: Bool?
+    var floatingApps: [String]?
     var hotkeys: [String: HotkeyConfig]?
 }
 
@@ -65,6 +66,7 @@ enum ConfigLoader {
                 "gapSize": 8.0,
                 "outerGap": 4.0,
                 "newWindowFocus": false,
+                "floatingApps": ["com.spotify.client"],
                 "hotkeys": [
                     "tile": ["keyCode": 36, "flags": ["cmd", "opt"]],
                     "focusLeft": ["keyCode": 4, "flags": ["cmd", "opt"]],
@@ -88,7 +90,8 @@ enum ConfigLoader {
         return TesseraConfig(
             gapSize: fc.gapSize ?? TesseraConfig().gapSize,
             outerGap: fc.outerGap ?? TesseraConfig().outerGap,
-            newWindowFocus: fc.newWindowFocus ?? TesseraConfig().newWindowFocus
+            newWindowFocus: fc.newWindowFocus ?? TesseraConfig().newWindowFocus,
+            floatingAppIDs: fc.floatingApps ?? TesseraConfig().floatingAppIDs
         )
     }
 
