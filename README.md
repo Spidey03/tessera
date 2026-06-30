@@ -1,45 +1,92 @@
 # Tessera
 
-A custom tiling window manager for macOS using a Binary Space Partitioning (BSP) tree layout engine.
+![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+![Python 3.12+](https://img.shields.io/badge/python-3.12+-3776AB?logo=python)
+![Swift 6.0+](https://img.shields.io/badge/swift-6.0+-F05138?logo=swift)
+![macOS 14.0+](https://img.shields.io/badge/macOS-14.0+-000000?logo=apple)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/anomalyco/tessera/pulls)
 
-## Architecture
+**Tessera** is a lightning-fast, animation-free tiling window manager for macOS powered by a Binary Space Partitioning (BSP) tree and virtual workspaces. It bypasses macOS's sluggish Space animations entirely — compute, hide, show, resize. Instantly.
 
-Tessera follows a **Brain vs Body** decoupling:
+---
 
-| Layer | Target | Description |
-|-------|--------|-------------|
-| Python prototype | `tessera/core/` | Rapid prototyping of BSP engine (Rect, TreeNode, Workspace, 27 tests) |
-| **TesseraKit** | `TesseraKit/Sources/TesseraKit/Core/` | Pure Swift BSP engine (no macOS deps) — Rect, Window, SplitType, TreeNode, Workspace, TesseraConfig |
-| **TesseraSystem** | `TesseraKit/Sources/TesseraSystem/` | macOS AX layer — MacWindow, WindowDiscovery, WindowObserver |
-| **TesseraDaemon** | `TesseraKit/Sources/TesseraDaemon/` | Orchestrator — CGEventTap hotkeys, Tiler, WindowMapper |
+## Why Tessera?
 
-## Prerequisites
+**Virtual Workspaces** — No slow macOS Space switching. All windows live on a single invisible canvas. Tessera instantly computes which windows to show, hide, and resize based on your active workspace. Zero animation, zero delay.
 
-- macOS 14.0+ (arm64)
-- Swift 6.0+ (included with Xcode 16+ or Command Line Tools)
-- **Accessibility** permission for the terminal/IDE running the daemon
-- **Input Monitoring** permission for global keyboard shortcuts
+**Animation-Free** — macOS applies a 300-500ms animation every time you switch Spaces. Tessera doesn't switch Spaces. It hides and shows windows via the Accessibility API in a single frame.
 
-## Setup
+**Keyboard-Driven Focus** — Navigate windows with vector math, not tab order. Focus left, right, up, or down relative to your current position in the BSP tree. Every movement is deterministic and instant.
+
+**Pure Math at the Core** — The layout engine is an OS-agnostic BSP tree. Split, remove, and balance leaves with simple arithmetic. The same logic runs in the Python prototype and the production Swift build.
+
+---
+
+## Architecture: Brain vs Body
+
+Tessera separates the "what" from the "how".
+
+| Layer | Role | Description |
+|-------|------|-------------|
+| **Brain** | Layout Engine | Pure BSP tree math. Zero OS dependencies. Prototyped in Python, ported to Swift as `TesseraKit`. Calculates split positions, focus paths, and gap insets. |
+| **Body** | macOS Bridge | Accessibility API (AXUIElement) calls. Enumerates windows, sets positions and sizes, subscribes to window-create notifications. Lives in `TesseraSystem` and `TesseraDaemon`. |
+
+This split means the entire tiling algorithm can be unit-tested without a display server. The Body is a thin translation layer — convert pure `Rect` values to `CGRect`, hand them to AX, done.
+
+```
+┌─────────────────────────────────────────┐
+│              Daemon (Swift)             │
+│  ┌──────────┐    ┌───────────────────┐  │
+│  │  Tiler   │───→│  WindowMapper     │  │
+│  │          │    │  (pure → AX)      │  │
+│  └──────────┘    └───────────────────┘  │
+│  ┌───────┴----------------------------┐ │ 
+│  │         Workspace (BSP)            │ │
+│  │        Brain: no OS deps           │ │
+│  └────────────────────────────---─────┘ │
+└─────────────────────────────────────────┘
+```
+
+---
+
+## Installation & Quick Start
+
+**Phase 1 — Python Prototype**
 
 ```bash
-git clone <repo>
-cd TesseraKit
+git clone https://github.com/anomalyco/tessera.git
+cd tessera
+
+python3 -m venv venv
+source venv/bin/activate
+pip install -e .
+
+# Run the BSP layout simulation
+python3 -c "
+from tessera.core.workspace import Workspace
+from tessera.core.rect import Rect
+
+ws = Workspace(Rect(0, 0, 1920, 1080))
+ws.add_window('A')
+ws.add_window('B')
+ws.add_window('C')
+for w, r in ws.get_layout():
+    print(f'{w.id}: {r}')
+"
 ```
 
-Grant permissions when prompted:
-
-```
-System Settings → Privacy & Security → Accessibility → Add Terminal
-System Settings → Privacy & Security → Input Monitoring → Add Terminal
-```
-
-## Usage
+**Phase 2+ — Swift Daemon (current)**
 
 ```bash
 cd TesseraKit
 swift run TesseraDaemon
 ```
+
+> ⚠️ **Future Requirements**: The Swift daemon will require macOS **Accessibility** and **Input Monitoring** permissions. Grant them at:
+> ```
+> System Settings → Privacy & Security → Accessibility → Add Terminal
+> System Settings → Privacy & Security → Input Monitoring → Add Terminal
+> ```
 
 ### Hotkeys
 
@@ -53,87 +100,104 @@ swift run TesseraDaemon
 
 ### Layout Behavior
 
-- **Split direction** alternates: Vertical → Horizontal → Vertical → ...
-- **New window** goes to the right (vertical split) or bottom (horizontal split)
-- **Focus** stays on the existing window after a split (configurable)
-- **Gaps**: 8px between windows, 4px outer margin (configurable)
+- **Split direction** is geometry-based: split the longer dimension of the target leaf (wider → vertical, taller → horizontal).
+- **New window** splits the largest leaf by area for balanced tile sizes.
+- **Focus** stays on the existing window after a split (configurable via `~/.config/tessera/config.json`).
+- **Gaps**: 8px between windows, 4px outer margin (configurable).
 
-## Project Status
-
-### ✅ Completed
-
-| Feature | Status |
-|---------|--------|
-| Python BSP prototype (Rect, TreeNode, Workspace, tests) | Done |
-| Swift BSP engine (TesseraKit) with 16 tests | Done |
-| AX window discovery (WindowDiscover CLI) | Done |
-| Window move/resize via AX | Done |
-| CGEventTap daemon (⌘⌥⏎ to tile, ⌘⌥⇧Q to quit) | Done |
-| WindowObserver — auto-tile on window create | Done |
-| WindowMapper — bridges pure Window ↔ MacWindow | Done |
-| Focus navigation (⌘⌥H/J/K/L) | Done |
-| Window removal (⌘⌥W) with re-tile | Done |
-
-### 📋 Planned
-
-- AX notifications for window destroy
-- Config file (`~/.config/tessera/config.json`)
-- Multi-monitor support
-- Fullscreen toggle (⌘⌥F)
-- Split direction toggle (⌘⌥Space)
-- Per-app tiling rules
-- launchd agent integration
+---
 
 ## Development
 
-### Run tests
+### Swift Tests
 
 ```bash
 cd TesseraKit
 swift run TesseraTests
 ```
 
-### Python tests (prototype)
+### Python Tests (prototype)
 
 ```bash
 source venv/bin/activate
-pip install -e .
 pytest tests/
 ```
 
-### Debug discovery
+### Debug Window Discovery
 
 ```bash
 cd TesseraKit
 swift run WindowDiscover
 ```
 
-## Files
+---
+
+## Project Structure
 
 ```
-TesseraKit/
-├── Package.swift
-└── Sources/
-    ├── TesseraKit/
-    │   └── Core/
-    │       ├── Rect.swift          # Rectangle with split/gap helpers
-    │       ├── Window.swift        # Pure window identity (id + rect)
-    │       ├── SplitType.swift     # Vertical / Horizontal
-    │       ├── TreeNode.swift      # BSP tree node
-    │       ├── Workspace.swift     # BSP layout engine
-    │       └── TesseraConfig.swift # Gap/split/focus config
-    ├── TesseraSystem/
-    │   ├── MacWindow.swift         # AXUIElement wrapper + move/resize
-    │   ├── WindowDiscovery.swift   # Enumerate windows via AX
-    │   └── WindowObserver.swift    # AX notification subscriber
-    ├── TesseraDaemon/
-    │   ├── main.swift              # Entry point
-    │   ├── Daemon.swift            # CGEventTap + run loop
-    │   ├── Tiler.swift             # Window discovery → BSP → layout
-    │   ├── WindowMapper.swift      # Bridge pure Window ↔ MacWindow
-    │   └── Hotkey.swift            # KeyBinding matching
-    ├── TesseraTests/
-    │   └── main.swift              # 16 BSP engine tests
-    └── WindowDiscover/
-        └── main.swift              # AX window enumeration CLI
+tessera/
+├── tessera/                    # Python BSP prototype
+│   └── core/
+│       ├── rect.py
+│       ├── window.py
+│       ├── workspace.py
+│       └── split_type.py
+├── tests/                      # Python tests (27)
+├── TesseraKit/                 # Swift production code
+│   ├── Package.swift
+│   └── Sources/
+│       ├── TesseraKit/Core/    # Pure Swift BSP engine
+│       ├── TesseraSystem/      # macOS AX layer
+│       ├── TesseraDaemon/      # Orchestrator + event loop
+│       ├── TesseraTests/       # 31 BSP engine tests
+│       └── WindowDiscover/     # AX enumeration CLI
+└── README.md
 ```
+
+---
+
+## Roadmap
+
+**Phase 1** ✅ — Core BSP layout engine (Python prototype + Swift port)
+- [x] Rect split/gap arithmetic
+- [x] BSP tree (add, remove, find largest leaf)
+- [x] Geometry-based split direction
+- [x] Focus navigation by vector position
+
+**Phase 2** 🚧 — macOS Accessibility hooks (current)
+- [x] AX window discovery and enumeration
+- [x] Window move/resize via AXUIElement
+- [x] CGEventTap global hotkey daemon
+- [x] WindowObserver for auto-tile on create
+- [x] Config file support (`~/.config/tessera/config.json`)
+- [x] Poll-based window destroy detection
+- [ ] Fullscreen toggle (`⌘⌥F`)
+
+**Phase 3** — Multi-monitor, hotkey customization, per-app rules
+- [ ] Per-monitor BSP workspaces
+- [ ] Split direction toggle (`⌘⌥Space`)
+- [ ] Per-app tiling rules (float, ignore, sticky)
+- [ ] launchd agent integration
+
+**Phase 4** — Polish, packaging, community
+- [ ] Homebrew formula
+- [ ] Dock icon / menu bar app
+- [ ] Configuration UI (optional)
+
+---
+
+## Contributing
+
+PRs are welcome. The project is small and the architecture is deliberately simple.
+
+- Brain changes (BSP math) go in `TesseraKit/Core/` and `tessera/core/`.
+- Body changes (macOS) go in `TesseraSystem/` or `TesseraDaemon/`.
+- Test coverage must be maintained. Run `swift run TesseraTests` (Swift) and `pytest` (Python) before opening a PR.
+
+For bugs or feature requests, open an issue at [github.com/anomalyco/tessera/issues](https://github.com/anomalyco/tessera/issues).
+
+---
+
+## License
+
+MIT. See [LICENSE](LICENSE) for details.
