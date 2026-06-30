@@ -59,8 +59,20 @@ struct Tiler {
     }
 
     private func screenRect() -> Rect {
-        let frame = screenCGRect()
-        return Rect(x: Double(frame.origin.x), y: Double(frame.origin.y),
-                    width: Double(frame.size.width), height: Double(frame.size.height))
+        guard let screen = NSScreen.main else {
+            return Rect(x: 0, y: 0, width: 1920, height: 1080)
+        }
+        let frame = screen.frame
+        let visible = screen.visibleFrame
+        // The visible frame excludes the menu bar and dock.
+        // Convert from NSScreen's bottom-left to top-left coordinates
+        // so the BSP engine matches AX's coordinate system.
+        let topInset = frame.height - (visible.origin.y + visible.height)
+        return Rect(
+            x: Double(visible.origin.x),
+            y: Double(topInset),
+            width: Double(visible.size.width),
+            height: Double(visible.size.height)
+        )
     }
 }
