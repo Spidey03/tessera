@@ -6,8 +6,10 @@ struct Tiler {
     let config: TesseraConfig
 
     /// Returns the workspace + mapper state for subsequent focus/remove operations.
+    /// - Parameter overflowedIDs: IDs of windows that previously overflowed the screen and were floated.
+    ///   These are excluded from the BSP tree (treated like config-floaters) in subsequent tiles.
     @discardableResult
-    func tileAllWindows() -> (workspace: Workspace, mapper: WindowMapper)? {
+    func tileAllWindows(overflowedIDs: Set<String> = []) -> (workspace: Workspace, mapper: WindowMapper, overflowedIDs: Set<String>)? {
         let allWindows = WindowDiscovery.allWindows()
         let windows = filterWindows(allWindows)
 
@@ -26,10 +28,11 @@ struct Tiler {
         let screenRect = screenRect()
         print("[tiler] screen rect: \(screenRect)")
 
-        // Separate config-floaters (never enter BSP tree) from tiled candidates
+        // Separate config-floaters + previously overflowed (never enter BSP tree) from tiled candidates
         let configFloaterBundleIDs = Set(config.floatingAppIDs)
         let floaterIDs = Set(windows.filter { configFloaterBundleIDs.contains($0.bundleID ?? "") }.map(\.id))
-        let tiledIDs = Set(windows.map(\.id)).subtracting(floaterIDs)
+        let alwaysExcluded = floaterIDs.union(overflowedIDs)
+        let tiledIDs = Set(windows.map(\.id)).subtracting(alwaysExcluded)
 
         var mapper = WindowMapper(realWindows: windows)
         print("[tiler] mapped \(mapper.pureWindows.count) pure windows (\(tiledIDs.count) tiled, \(floaterIDs.count) floating)")
@@ -46,16 +49,31 @@ struct Tiler {
             print("[tiler]   \(win.id) → \(rect)")
         }
 
-        // Apply layout
-        mapper.applyLayout(layout)
+        // Apply layout — windows that overflow the screen will be floated
+        var floated = mapper.applyLayout(layout, screenRect: screenRect)
 
-        // Screen-center config-floaters (they never entered the tree)
-        for id in floaterIDs {
-            mapper.centerOnScreen(id: id)
+        // Cascade: if a tiled window overflowed, rebuild the tree without it
+        var resultWorkspace = workspace
+        var iteration = 0
+        while !floated.isEmpty && iteration < 3 {
+            iteration += 1
+            let remaining = tiledIDs.subtracting(floated)
+            guard !remaining.isEmpty else {
+                print("[tiler] all remaining windows overflowed — giving up")
+                break
+            }
+            resultWorkspace = Workspace(monitorRect: screenRect, config: config)
+            for id in remaining.sorted() {
+                resultWorkspace.addWindow(Window(id: id))
+            }
+            let newLayout = resultWorkspace.getLayout()
+            if newLayout.isEmpty { break }
+            floated = mapper.applyLayout(newLayout, screenRect: screenRect)
         }
 
-        print("[tiler] layout applied ✓")
-        return (workspace, mapper)
+        let newOverflowed = overflowedIDs.union(floated)
+        print("[tiler] layout applied ✓ (\(tiledIDs.count - newOverflowed.count) tiled, \(newOverflowed.count) excluded)")
+        return (resultWorkspace, mapper, newOverflowed)
     }
 
     func filterWindows(_ allWindows: [MacWindow]) -> [MacWindow] {

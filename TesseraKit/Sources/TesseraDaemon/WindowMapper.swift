@@ -45,29 +45,56 @@ public struct WindowMapper {
     }
 
     @discardableResult
-    public mutating func applyLayout(_ layout: [(Window, Rect)]) -> Set<String> {
+    public mutating func applyLayout(_ layout: [(Window, Rect)], screenRect: Rect) -> Set<String> {
+        var floatedIDs: Set<String> = []
         var moved = 0
+        let tolerance: CGFloat = 5
+        let visibleBounds = CGRect(x: screenRect.x, y: screenRect.y,
+                                   width: screenRect.width, height: screenRect.height)
+
         for (pureWin, rect) in layout {
             guard var macWin = mapping[pureWin.id] else {
                 print("[mapper]   SKIP: \(pureWin.id) not found in mapping")
                 continue
             }
             let cgRect = CGRect(x: rect.x, y: rect.y, width: rect.width, height: rect.height)
-            macWin.setPosition(cgRect.origin)
+
+            // Try to resize to tile size first, then check actual size for overflow
             macWin.setSize(cgRect.size)
+
+            if let actualSize = macWin.actualSize() {
+                let windowBottom = cgRect.origin.y + actualSize.height
+                let windowRight = cgRect.origin.x + actualSize.width
+                let screenBottom = visibleBounds.origin.y + visibleBounds.height
+                let screenRight = visibleBounds.origin.x + visibleBounds.width
+
+                if windowBottom > screenBottom + tolerance || windowRight > screenRight + tolerance {
+                    floatedIDs.insert(pureWin.id)
+                    print("[mapper]   \(macWin.appName): \"\(macWin.title)\" → out of bounds, keeping at (\(Int(macWin.position.x)),\(Int(macWin.position.y)))")
+                } else {
+                    macWin.setPosition(cgRect.origin)
+                    print("[mapper]   \(macWin.appName): \"\(macWin.title)\" → pos(\(Int(rect.x)),\(Int(rect.y))) size(\(Int(actualSize.width))x\(Int(actualSize.height)))")
+                }
+            } else {
+                macWin.setPosition(cgRect.origin)
+                print("[mapper]   \(macWin.appName): \"\(macWin.title)\" → pos(\(Int(rect.x)),\(Int(rect.y))) size(\(Int(rect.width))x\(Int(rect.height)))")
+            }
+
             mapping[pureWin.id] = macWin
             moved += 1
-            print("[mapper]   \(macWin.appName): \"\(macWin.title)\" → pos(\(Int(rect.x)),\(Int(rect.y))) size(\(Int(rect.width))x\(Int(rect.height)))")
         }
         print("[mapper] layout applied: \(moved) moved")
-        return []
+        if !floatedIDs.isEmpty {
+            print("[mapper] floated \(floatedIDs.count) window(s)")
+        }
+        return floatedIDs
     }
 
     @discardableResult
-    public mutating func centerOnScreen(id: String) -> Bool {
+    public mutating func centerOnScreen(id: String, staggerIndex: Int = 0) -> Bool {
         guard var macWin = mapping[id] else { return false }
         let actual = macWin.actualSize() ?? macWin.size
-        let pos = screenCenter(size: actual)
+        let pos = screenCenter(size: actual, staggerIndex: staggerIndex)
         if macWin.setPosition(pos) {
             mapping[id] = macWin
             print("[mapper]   \(macWin.appName): \"\(macWin.title)\" → centered on screen at (\(Int(pos.x)),\(Int(pos.y)))")
@@ -76,13 +103,14 @@ public struct WindowMapper {
         return false
     }
 
-    private func screenCenter(size: CGSize) -> CGPoint {
+    private func screenCenter(size: CGSize, staggerIndex: Int = 0) -> CGPoint {
         let visibleFrame = NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 33, width: 1512, height: 944)
         let screenFrame = NSScreen.main?.frame ?? CGRect(x: 0, y: 0, width: 1512, height: 982)
         let topInset = round(screenFrame.height - visibleFrame.origin.y - visibleFrame.height)
         let cx = visibleFrame.origin.x + (visibleFrame.width - size.width) / 2
         let cy = topInset + (visibleFrame.height - size.height) / 2
-        return CGPoint(x: max(cx, 0), y: max(cy, topInset))
+        let staggerOffset: CGFloat = 28 * CGFloat(staggerIndex)
+        return CGPoint(x: max(cx + staggerOffset, 0), y: max(cy + staggerOffset, topInset))
     }
 }
 

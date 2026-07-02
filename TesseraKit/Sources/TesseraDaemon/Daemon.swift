@@ -1,3 +1,4 @@
+import AppKit
 import ApplicationServices
 import CoreGraphics
 import Foundation
@@ -30,6 +31,12 @@ final class Daemon: @unchecked Sendable {
     var currentWorkspace: Workspace?
     /// Persistent window mapping across operations
     var currentMapper: WindowMapper?
+    /// Cooldown flag to suppress spurious re-tiles from transient windows created during resize
+    private var recentlyTiled = false
+    /// IDs of config-floaters already centered (never re-center on subsequent tiles)
+    private var centeredFloaterIDs: Set<String> = []
+    /// IDs of windows that overflowed the screen and were floated (excluded from BSP tree on subsequent tiles)
+    private var overflowedIDs: Set<String> = []
 
     init(tiler: Tiler, bindings: [KeyBinding]) {
         self.tiler = tiler
@@ -67,7 +74,7 @@ final class Daemon: @unchecked Sendable {
 
         // Set up the auto-tile callback with suppression
         observer.onChange = { [weak self] in
-            guard let self else { return }
+            guard let self, !recentlyTiled else { return }
             print("[auto-tile] window change detected — tiling")
             self.tileWithSuppression()
         }
@@ -97,13 +104,39 @@ final class Daemon: @unchecked Sendable {
     /// Saves workspace + mapper state for subsequent focus/remove operations.
     func tileWithSuppression() {
         observer.isSuppressed = true
-        let result = tiler.tileAllWindows()
-        if let (ws, mapper) = result {
+        let result = tiler.tileAllWindows(overflowedIDs: overflowedIDs)
+        if let (ws, mapper, newOverflowed) = result {
             currentWorkspace = ws
             currentMapper = mapper
+            overflowedIDs = newOverflowed
         }
         observer.isSuppressed = false
         subscribeAllToDestroyed()
+        // Center NEW config-floaters only; stagger to avoid overlap
+        centerNewFloaters()
+        // Prevent spurious re-tiles from transient windows created during resize.
+        // Must outlast the 50ms AX debounce interval + notification delivery window.
+        recentlyTiled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.recentlyTiled = false
+        }
+    }
+
+    private func centerNewFloaters() {
+        guard let mapper = currentMapper else { return }
+        let configFloaterBundleIDs = Set(tiler.config.floatingAppIDs)
+        let newFloaters = mapper.allWindows
+            .filter { configFloaterBundleIDs.contains($0.bundleID ?? "") && !centeredFloaterIDs.contains($0.id) }
+            .sorted { $0.id < $1.id }
+        guard !newFloaters.isEmpty else { return }
+        var updatedMapper = mapper
+        var staggerIndex = 0
+        for win in newFloaters {
+            updatedMapper.centerOnScreen(id: win.id, staggerIndex: staggerIndex)
+            centeredFloaterIDs.insert(win.id)
+            staggerIndex += 1
+        }
+        currentMapper = updatedMapper
     }
 
     // MARK: - Destroyed notification subscription
@@ -116,6 +149,21 @@ final class Daemon: @unchecked Sendable {
     }
 
     // MARK: - Focus navigation
+
+    private func tilerScreenRect() -> Rect {
+        guard let screen = NSScreen.main else {
+            return Rect(x: 0, y: 0, width: 1920, height: 1080)
+        }
+        let frame = screen.frame
+        let visible = screen.visibleFrame
+        let topInset = frame.height - (visible.origin.y + visible.height)
+        return Rect(
+            x: Double(visible.origin.x),
+            y: Double(topInset),
+            width: Double(visible.size.width),
+            height: Double(visible.size.height)
+        )
+    }
 
     func focusLeft() {
         guard let ws = currentWorkspace else { print("[focus] no workspace — tile first"); return }
@@ -154,7 +202,8 @@ final class Daemon: @unchecked Sendable {
             currentWorkspace = nil
             currentMapper = nil
         } else {
-            mapper.applyLayout(layout)
+            let screenRect = tilerScreenRect()
+            mapper.applyLayout(layout, screenRect: screenRect)
             currentMapper = mapper
         }
         observer.isSuppressed = false
