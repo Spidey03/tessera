@@ -15,10 +15,6 @@ public final class WindowObserver {
 
     private let notificationNames: [String] = [
         kAXWindowCreatedNotification as String,
-        // Focus-change notifications intentionally excluded — they cause
-        // unwanted full re-tiles on every focus switch. Only structural
-        // changes (create/destroy) trigger auto-tile in the current model.
-        // "AXWindowDeminiaturized",
     ]
 
     public init(debounce: TimeInterval = 0.05) {
@@ -85,7 +81,7 @@ public final class WindowObserver {
         var observer: AXObserver?
         let createErr = AXObserverCreate(pid, { obs, element, notification, refcon in
             let selfPtr = Unmanaged<WindowObserver>.fromOpaque(refcon!).takeUnretainedValue()
-            selfPtr.handleNotification(notification: notification)
+            selfPtr.handleNotification(element: element, notification: notification)
         }, &observer)
 
         guard createErr == .success, let obs = observer else {
@@ -111,7 +107,16 @@ public final class WindowObserver {
 
     // MARK: - Handling
 
-    private func handleNotification(notification: CFString) {
+    public func subscribeToDestroyed(element: AXUIElement, forPID pid: pid_t) {
+        guard let obs = observers[pid] else { return }
+        let refcon = Unmanaged.passUnretained(self).toOpaque()
+        let err = AXObserverAddNotification(obs, element, kAXUIElementDestroyedNotification as CFString, refcon)
+        if err != .success && err != .notificationAlreadyRegistered {
+            print("[observer] subscribeToDestroyed error: \(err.rawValue)")
+        }
+    }
+
+    private func handleNotification(element: AXUIElement, notification: CFString) {
         guard !isSuppressed else { return }
 
         print("[observer] notification: \(notification)")

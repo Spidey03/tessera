@@ -30,10 +30,6 @@ final class Daemon: @unchecked Sendable {
     var currentWorkspace: Workspace?
     /// Persistent window mapping across operations
     var currentMapper: WindowMapper?
-    /// Last known window count for polling-based destroy detection
-    var lastKnownWindowCount: Int = 0
-    /// Periodic timer for window destroy detection
-    var pollTimer: Timer?
 
     init(tiler: Tiler, bindings: [KeyBinding]) {
         self.tiler = tiler
@@ -78,8 +74,12 @@ final class Daemon: @unchecked Sendable {
         observer.start()
         print("AX observer started.")
 
-        startPolling()
-        print("Poll timer started (1s interval).")
+        // Auto-tile on startup
+        let initialWindows = tiler.filterWindows(WindowDiscovery.allWindows())
+        if !initialWindows.isEmpty {
+            print("[startup] \(initialWindows.count) windows found — auto-tiling")
+            tileWithSuppression()
+        }
 
         print()
         print("Tessera daemon running.")
@@ -103,45 +103,16 @@ final class Daemon: @unchecked Sendable {
             currentMapper = mapper
         }
         observer.isSuppressed = false
-        updateLastKnownCount()
+        subscribeAllToDestroyed()
     }
 
-    // MARK: - Polling for window destroy detection
+    // MARK: - Destroyed notification subscription
 
-    func startPolling() {
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.pollChanges()
+    private func subscribeAllToDestroyed() {
+        guard let mapper = currentMapper else { return }
+        for win in mapper.allWindows {
+            observer.subscribeToDestroyed(element: win.windowRef, forPID: win.appPID)
         }
-    }
-
-    func stopPolling() {
-        pollTimer?.invalidate()
-        pollTimer = nil
-    }
-
-    private func pollChanges() {
-        guard !observer.isSuppressed else { return }
-
-        let allWindows = WindowDiscovery.allWindows()
-        let windows = tiler.filterWindows(allWindows)
-        let currentCount = windows.count
-
-        if currentCount < lastKnownWindowCount {
-            print("[poll] detected window removal (count: \(lastKnownWindowCount) → \(currentCount))")
-            tileWithSuppression()
-        }
-
-        lastKnownWindowCount = currentCount
-    }
-
-    private func updateLastKnownCount() {
-        let allWindows = WindowDiscovery.allWindows()
-        let windows = tiler.filterWindows(allWindows)
-        lastKnownWindowCount = windows.count
-    }
-
-    deinit {
-        stopPolling()
     }
 
     // MARK: - Focus navigation

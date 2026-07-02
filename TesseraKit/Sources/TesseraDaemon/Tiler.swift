@@ -46,34 +46,16 @@ struct Tiler {
             print("[tiler]   \(win.id) → \(rect)")
         }
 
-        // Apply layout to tiled windows; misfits are auto-floated
-        var floated = mapper.applyLayout(layout)
+        // Apply layout
+        mapper.applyLayout(layout)
 
         // Screen-center config-floaters (they never entered the tree)
         for id in floaterIDs {
             mapper.centerOnScreen(id: id)
         }
 
-        // Cascade: if a tiled window misfit, rebuild without it
-        var resultWorkspace = workspace
-        while !floated.isEmpty {
-            print("[tiler] re-tiling without \(floated.count) floated window(s)")
-            let remaining = tiledIDs.subtracting(floated)
-            guard !remaining.isEmpty else {
-                print("[tiler] all windows floated — nothing to tile")
-                return nil
-            }
-            resultWorkspace = Workspace(monitorRect: screenRect, config: config)
-            for id in remaining {
-                resultWorkspace.addWindow(Window(id: id))
-            }
-            let newLayout = resultWorkspace.getLayout()
-            if newLayout.isEmpty { break }
-            floated = mapper.applyLayout(newLayout)
-        }
-
         print("[tiler] layout applied ✓")
-        return (resultWorkspace, mapper)
+        return (workspace, mapper)
     }
 
     func filterWindows(_ allWindows: [MacWindow]) -> [MacWindow] {
