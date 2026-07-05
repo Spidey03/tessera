@@ -32,6 +32,17 @@ public struct WindowMapper {
         Array(mapping.values)
     }
 
+    public func window(withID id: String) -> MacWindow? { mapping[id] }
+
+    @discardableResult
+    public mutating func setWindowFrame(id: String, position: CGPoint, size: CGSize) -> Bool {
+        guard var macWin = mapping[id] else { return false }
+        macWin.setPosition(position)
+        macWin.setSize(size)
+        mapping[id] = macWin
+        return true
+    }
+
     public var pureWindows: [Window] {
         // Sort by position (top-to-bottom, left-to-right) so the BSP tree
         // layout is deterministic and stable across consecutive tiles.

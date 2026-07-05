@@ -51,4 +51,9 @@ extension KeyBinding {
         flags: [.maskCommand, .maskAlternate],
         action: "remove"
     )
+    static let fullscreen = KeyBinding(
+        keyCode: 3, // F
+        flags: [.maskCommand, .maskAlternate],
+        action: "fullscreen"
+    )
 }

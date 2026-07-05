@@ -37,6 +37,8 @@ final class Daemon: @unchecked Sendable {
     private var centeredFloaterIDs: Set<String> = []
     /// IDs of windows that overflowed the screen and were floated (excluded from BSP tree on subsequent tiles)
     private var overflowedIDs: Set<String> = []
+    /// ID of the window currently in fullscreen mode, if any (nil = not in fullscreen)
+    private var fullscreenWindowID: String? = nil
 
     init(tiler: Tiler, bindings: [KeyBinding]) {
         self.tiler = tiler
@@ -95,6 +97,7 @@ final class Daemon: @unchecked Sendable {
         print("  ⌘⌥K/L — focus left/right")
         print("  ⌘⌥W  — remove focused window")
         print("  ⌘⌥⇧Q — quit")
+        print("  ⌘⌥F   — toggle fullscreen")
         print("Listening for keyDown events...")
 
         CFRunLoopRun()
@@ -112,6 +115,7 @@ final class Daemon: @unchecked Sendable {
         }
         observer.isSuppressed = false
         subscribeAllToDestroyed()
+        fullscreenWindowID = nil
         // Center NEW config-floaters only; stagger to avoid overlap
         centerNewFloaters()
         // Prevent spurious re-tiles from transient windows created during resize.
@@ -149,6 +153,19 @@ final class Daemon: @unchecked Sendable {
     }
 
     // MARK: - Focus navigation
+
+    /// Re-checks AX at this moment to find the truly focused window in the mapper.
+    /// `mapper.focusedWindow` is stale because `isGloballyFocused` is captured at tile time.
+    private func findFocusedMapperWindow(in mapper: WindowMapper) -> String? {
+        guard let frontAppPID = NSWorkspace.shared.frontmostApplication?.processIdentifier else { return nil }
+        let appElement = AXUIElementCreateApplication(frontAppPID)
+        var focusedRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &focusedRef) == .success,
+              let focusedAX = focusedRef as! AXUIElement? else { return nil }
+        return mapper.allWindows.first { win in
+            win.appPID == frontAppPID && CFEqual(win.windowRef, focusedAX)
+        }?.id
+    }
 
     private func tilerScreenRect() -> Rect {
         guard let screen = NSScreen.main else {
@@ -207,6 +224,37 @@ final class Daemon: @unchecked Sendable {
             currentMapper = mapper
         }
         observer.isSuppressed = false
+    }
+
+    func toggleFullscreen() {
+        guard let ws = currentWorkspace else { print("[fullscreen] no workspace — tile first"); return }
+        guard var mapper = currentMapper else { print("[fullscreen] no mapper — tile first"); return }
+
+        // Exit fullscreen
+        if let fsID = fullscreenWindowID {
+            fullscreenWindowID = nil
+            let stillExists = ws.getLayout().contains { $0.0.id == fsID }
+            if stillExists {
+                print("[fullscreen] exiting — restoring tile position")
+                observer.isSuppressed = true
+                let screenRect = tilerScreenRect()
+                mapper.applyLayout(ws.getLayout(), screenRect: screenRect)
+                currentMapper = mapper
+                observer.isSuppressed = false
+                return
+            }
+            print("[fullscreen] stale fullscreen window gone — entering fresh")
+        }
+
+        // Enter fullscreen
+        guard let focusedID = findFocusedMapperWindow(in: mapper) else { print("[fullscreen] no focused window"); return }
+        guard mapper.window(withID: focusedID) != nil else { print("[fullscreen] focused window not in mapper"); return }
+
+        let sr = tilerScreenRect()
+        mapper.setWindowFrame(id: focusedID, position: CGPoint(x: sr.x, y: sr.y), size: CGSize(width: sr.width, height: sr.height))
+        currentMapper = mapper
+        fullscreenWindowID = focusedID
+        print("[fullscreen] ✓ \(focusedID)")
     }
 
     // MARK: - Permissions
@@ -307,6 +355,12 @@ private let eventTapCallback: CGEventTapCallBack = { proxy, type, event, userInf
         case "remove":
             CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue) {
                 daemon.removeFocused()
+            }
+            CFRunLoopWakeUp(CFRunLoopGetMain())
+            return nil
+        case "fullscreen":
+            CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue) {
+                daemon.toggleFullscreen()
             }
             CFRunLoopWakeUp(CFRunLoopGetMain())
             return nil
