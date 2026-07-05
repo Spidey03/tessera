@@ -261,14 +261,13 @@ func testFocusRightAtEdgeReturnsFalse() throws {
     try assertEqual(ws.focusedWindowID, "B")
 }
 
-func testFocusRightCyclesThroughThreeWindows() throws {
+func testFocusRightMovesToRightmostWindow() throws {
     let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
     ws.addWindow(Window(id: "A"))
     ws.addWindow(Window(id: "B"))
     ws.addWindow(Window(id: "C"))
-    // Layout order: A (focused), C, B
-    ws.focusRight()
-    try assertEqual(ws.focusedWindowID, "C")
+    // Layout: A (top-left, focused), C (bottom-left), B (right)
+    // Spatial: A→focusRight→B (B is to the right of A)
     ws.focusRight()
     try assertEqual(ws.focusedWindowID, "B")
     let last = ws.focusRight()
@@ -276,36 +275,35 @@ func testFocusRightCyclesThroughThreeWindows() throws {
     try assertEqual(ws.focusedWindowID, "B")
 }
 
-func testFocusLeftCyclesThroughThreeWindows() throws {
+func testFocusLeftMovesToLeftmostWindow() throws {
     let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
     ws.addWindow(Window(id: "A"))
     ws.addWindow(Window(id: "B"))
     ws.addWindow(Window(id: "C"))
-    // Layout order: A (focused), C, B
-    // Jump to rightmost first, then navigate left
-    ws.focusRight()
-    ws.focusRight()
+    // Layout: A (top-left), C (bottom-left), B (right, focused)
+    // Spatial: B→focusLeft→A (A and C are equally left, A wins as first-encountered)
+    ws.focusRight() // A → B
     try assertEqual(ws.focusedWindowID, "B")
-    ws.focusLeft()
-    try assertEqual(ws.focusedWindowID, "C")
-    ws.focusLeft()
+    ws.focusLeft()  // B → A
     try assertEqual(ws.focusedWindowID, "A")
     let last = ws.focusLeft()
     try assertEqual(last, false)
     try assertEqual(ws.focusedWindowID, "A")
 }
 
-func testFocusAfterRemovePreservesNavigationOrder() throws {
+func testFocusRightAfterRemoveReturnsFalseWhenStacked() throws {
     let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
     ws.addWindow(Window(id: "A"))
     ws.addWindow(Window(id: "B"))
     ws.addWindow(Window(id: "C"))
-    // Order: A, C, B. Remove B.
+    // Layout: A (top-left, focused), C (bottom-left), B (right)
     ws.removeWindow(id: "B")
-    // Order: A, C
+    // Now only A and C remain, stacked vertically (same column)
     try assertEqual(ws.focusedWindowID, "A")
-    ws.focusRight()
-    try assertEqual(ws.focusedWindowID, "C")
+    // No window is to the right of A
+    let result = ws.focusRight()
+    try assertEqual(result, false)
+    try assertEqual(ws.focusedWindowID, "A")
 }
 
 func testFocusLeftOnEmptyWorkspaceReturnsFalse() throws {
@@ -399,9 +397,9 @@ let tests: [(String, () throws -> Void)] = [
     ("FocusedWindowID after focusLeft round-trip", testFocusedWindowIDAfterFocusLeft),
     ("FocusLeft at edge returns false", testFocusLeftAtEdgeReturnsFalse),
     ("FocusRight at edge returns false", testFocusRightAtEdgeReturnsFalse),
-    ("FocusRight cycles through three windows", testFocusRightCyclesThroughThreeWindows),
-    ("FocusLeft cycles through three windows", testFocusLeftCyclesThroughThreeWindows),
-    ("Focus after remove preserves navigation order", testFocusAfterRemovePreservesNavigationOrder),
+    ("FocusRight moves to rightmost window", testFocusRightMovesToRightmostWindow),
+    ("FocusLeft moves to leftmost window", testFocusLeftMovesToLeftmostWindow),
+    ("FocusRight after remove returns false when stacked", testFocusRightAfterRemoveReturnsFalseWhenStacked),
     ("FocusLeft on empty workspace returns false", testFocusLeftOnEmptyWorkspaceReturnsFalse),
     ("FocusRight on empty workspace returns false", testFocusRightOnEmptyWorkspaceReturnsFalse),
     // KeyBinding

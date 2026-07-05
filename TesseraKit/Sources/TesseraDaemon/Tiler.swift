@@ -78,12 +78,24 @@ struct Tiler {
 
     func filterWindows(_ allWindows: [MacWindow]) -> [MacWindow] {
         let screenFrame = screenCGRect()
+        let excludedSubroles: Set<String> = [
+            "AXDialog",
+            "AXSheet",
+            "AXFloatingWindow",
+            "AXSystemFloatingWindow",
+            "AXStatusWindow",
+            "AXHelpWindow",
+        ]
         return allWindows.filter { w in
             guard !w.isMinimized else { return false }
-            // Only tile real application windows (skip desktop widgets, helper panels, etc.)
             guard w.role == "AXWindow" else { return false }
             // Skip desktop wallpaper windows: fullscreen, empty title, at origin
             if w.title.isEmpty && w.position == .zero && w.size == screenFrame.size { return false }
+            // Exclude non-standard window types (dialogs, sheets, floating panels, etc.)
+            if let sr = w.subrole, excludedSubroles.contains(sr) {
+                print("[tiler] excluding \(w.appName): \"\(w.title)\" — subrole=\(sr)")
+                return false
+            }
             return true
         }
     }

@@ -8,6 +8,7 @@ public struct MacWindow {
     public let bundleID: String?
     public let title: String
     public let role: String?
+    public let subrole: String?
     public var position: CGPoint
     public var size: CGSize
     public let isFocused: Bool
@@ -57,6 +58,7 @@ public struct MacWindow {
 extension MacWindow: CustomStringConvertible {
     public var description: String {
         let focusMark = isGloballyFocused ? " [global]" : isFocused ? " [app-focused]" : ""
-        return "\(appName)[\(appPID)] \"\(title)\" at (\(Int(position.x)), \(Int(position.y))) \(Int(size.width))x\(Int(size.height))\(focusMark)"
+        let subroleTag = subrole.map { " [\($0)]" } ?? ""
+        return "\(appName)[\(appPID)] \"\(title)\" at (\(Int(position.x)), \(Int(position.y))) \(Int(size.width))x\(Int(size.height))\(subroleTag)\(focusMark)"
     }
 }

@@ -28,6 +28,7 @@ public struct WindowDiscovery {
         return windowList.compactMap { win in
             let title: String = getAttr(element: win, key: kAXTitleAttribute) ?? ""
             let role: String? = getAttr(element: win, key: kAXRoleAttribute)
+            let subrole: String? = getAttr(element: win, key: kAXSubroleAttribute)
             let minimized: Bool = getAttr(element: win, key: kAXMinimizedAttribute) ?? true
             let isFocused: Bool = focusedWindow.map { CFEqual(win, $0) } ?? false
 
@@ -50,6 +51,7 @@ public struct WindowDiscovery {
                 bundleID: app.bundleIdentifier,
                 title: title,
                 role: role,
+                subrole: subrole,
                 position: position,
                 size: size,
                 isFocused: isFocused,

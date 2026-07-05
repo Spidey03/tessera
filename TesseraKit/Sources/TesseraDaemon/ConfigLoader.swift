@@ -72,8 +72,8 @@ enum ConfigLoader {
                     "focusLeft": ["keyCode": 4, "flags": ["cmd", "opt"]],
                     "focusRight": ["keyCode": 37, "flags": ["cmd", "opt"]],
                     "remove": ["keyCode": 13, "flags": ["cmd", "opt"]],
-                    "focusUp": ["keyCode": 126, "flags": ["cmd", "opt"]],
-                    "focusDown": ["keyCode": 125, "flags": ["cmd", "opt"]],
+                    "focusUp": ["keyCode": 34, "flags": ["cmd", "opt"]],
+                    "focusDown": ["keyCode": 46, "flags": ["cmd", "opt"]],
                     "fullscreen": ["keyCode": 3, "flags": ["cmd", "opt"]],
                     "quit": ["keyCode": 12, "flags": ["cmd", "opt", "shift"]],
                 ] as [String: [String: Any]],
@@ -106,10 +106,8 @@ enum ConfigLoader {
             KeyBinding(keyCode: 40, flags: [.maskCommand, .maskAlternate], action: "focusLeft"),
             KeyBinding(keyCode: 38, flags: [.maskCommand, .maskAlternate], action: "focusRight"),
             KeyBinding(keyCode: 13, flags: [.maskCommand, .maskAlternate], action: "remove"),
-            KeyBinding(keyCode: 123, flags: [.maskCommand, .maskAlternate], action: "focusLeft"),   // ←
-            KeyBinding(keyCode: 124, flags: [.maskCommand, .maskAlternate], action: "focusRight"),  // →
-            KeyBinding(keyCode: 125, flags: [.maskCommand, .maskAlternate], action: "focusDown"),   // ↓
-            KeyBinding(keyCode: 126, flags: [.maskCommand, .maskAlternate], action: "focusUp"),     // ↑
+            KeyBinding(keyCode: 34, flags: [.maskCommand, .maskAlternate], action: "focusUp"),      // I
+            KeyBinding(keyCode: 46, flags: [.maskCommand, .maskAlternate], action: "focusDown"),    // M
             KeyBinding(keyCode: 3, flags: [.maskCommand, .maskAlternate], action: "fullscreen"),
             KeyBinding(keyCode: 12, flags: [.maskCommand, .maskAlternate, .maskShift], action: "quit"),
         ]

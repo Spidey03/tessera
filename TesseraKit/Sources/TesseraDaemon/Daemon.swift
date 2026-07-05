@@ -97,8 +97,9 @@ final class Daemon: @unchecked Sendable {
         print("  ⌘⌥K/L — focus left/right")
         print("  ⌘⌥W  — remove focused window")
         print("  ⌘⌥⇧Q — quit")
-        print("  ⌘⌥arrows — focus directionally")
-        print("  ⌘⌥HJKL  — vim-style directional focus")
+        print("  ⌘⌥H/L — focus left/right")
+        print("  ⌘⌥K/J — focus left/right (vim-style)")
+        print("  ⌘⌥I/M — focus up/down")
         print("  ⌘⌥F   — toggle fullscreen")
         print("Listening for keyDown events...")
 
