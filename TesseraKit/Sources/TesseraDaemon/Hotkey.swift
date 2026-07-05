@@ -51,6 +51,16 @@ extension KeyBinding {
         flags: [.maskCommand, .maskAlternate],
         action: "remove"
     )
+    static let cycleNext = KeyBinding(
+        keyCode: 125, // Down arrow
+        flags: [.maskCommand, .maskAlternate],
+        action: "cycleNext"
+    )
+    static let cyclePrev = KeyBinding(
+        keyCode: 126, // Up arrow
+        flags: [.maskCommand, .maskAlternate],
+        action: "cyclePrev"
+    )
     static let fullscreen = KeyBinding(
         keyCode: 3, // F
         flags: [.maskCommand, .maskAlternate],

@@ -103,6 +103,26 @@ public final class Workspace: @unchecked Sendable {
         return result
     }
 
+    // MARK: - Cycle navigation
+
+    @discardableResult
+    public func cycleNext() -> Bool {
+        let windows = getLayout()
+        guard let currentID = focusedWindowID,
+              let idx = windows.firstIndex(where: { $0.0.id == currentID }),
+              windows.count > 1 else { return false }
+        return focusWindow(id: windows[(idx + 1) % windows.count].0.id)
+    }
+
+    @discardableResult
+    public func cyclePrev() -> Bool {
+        let windows = getLayout()
+        guard let currentID = focusedWindowID,
+              let idx = windows.firstIndex(where: { $0.0.id == currentID }),
+              windows.count > 1 else { return false }
+        return focusWindow(id: windows[(idx - 1 + windows.count) % windows.count].0.id)
+    }
+
     // MARK: - Focus navigation
 
     public var focusedWindowID: String? {
@@ -114,18 +134,144 @@ public final class Workspace: @unchecked Sendable {
     public func focusLeft() -> Bool {
         let windows = getLayout()
         guard let currentID = focusedWindowID,
-              let idx = windows.firstIndex(where: { $0.0.id == currentID }),
-              idx > 0 else { return false }
-        return focusWindow(id: windows[idx - 1].0.id)
+              let current = windows.first(where: { $0.0.id == currentID }) else { return false }
+
+        let cur = current.1
+        let cx = cur.x + cur.width / 2
+
+        var best: (Window, Rect)? = nil
+        var bestDist: Double = .greatestFiniteMagnitude
+        var bestOverlap: Double = 0
+
+        for (w, r) in windows {
+            guard w.id != currentID else { continue }
+            let rightEdge = r.x + r.width
+            guard rightEdge <= cx else { continue }
+
+            let dist = cx - rightEdge
+            let overlap = max(0, min(cur.y + cur.height, r.y + r.height) - max(cur.y, r.y))
+            let hasOverlap = overlap > 0
+
+            if best == nil { best = (w, r); bestDist = dist; bestOverlap = overlap; continue }
+
+            let bestHadOverlap = bestOverlap > 0
+            guard !(!hasOverlap && bestHadOverlap) else { continue }
+            guard !(hasOverlap == bestHadOverlap && dist > bestDist) else { continue }
+            guard !(hasOverlap == bestHadOverlap && dist == bestDist && overlap <= bestOverlap) else { continue }
+
+            best = (w, r); bestDist = dist; bestOverlap = overlap
+        }
+
+        guard let target = best else { return false }
+        return focusWindow(id: target.0.id)
     }
 
     @discardableResult
     public func focusRight() -> Bool {
         let windows = getLayout()
         guard let currentID = focusedWindowID,
-              let idx = windows.firstIndex(where: { $0.0.id == currentID }),
-              idx < windows.count - 1 else { return false }
-        return focusWindow(id: windows[idx + 1].0.id)
+              let current = windows.first(where: { $0.0.id == currentID }) else { return false }
+
+        let cur = current.1
+        let cx = cur.x + cur.width / 2
+
+        var best: (Window, Rect)? = nil
+        var bestDist: Double = .greatestFiniteMagnitude
+        var bestOverlap: Double = 0
+
+        for (w, r) in windows {
+            guard w.id != currentID else { continue }
+            let leftEdge = r.x
+            guard leftEdge >= cx else { continue }
+
+            let dist = leftEdge - cx
+            let overlap = max(0, min(cur.y + cur.height, r.y + r.height) - max(cur.y, r.y))
+            let hasOverlap = overlap > 0
+
+            if best == nil { best = (w, r); bestDist = dist; bestOverlap = overlap; continue }
+
+            let bestHadOverlap = bestOverlap > 0
+            guard !(!hasOverlap && bestHadOverlap) else { continue }
+            guard !(hasOverlap == bestHadOverlap && dist > bestDist) else { continue }
+            guard !(hasOverlap == bestHadOverlap && dist == bestDist && overlap <= bestOverlap) else { continue }
+
+            best = (w, r); bestDist = dist; bestOverlap = overlap
+        }
+
+        guard let target = best else { return false }
+        return focusWindow(id: target.0.id)
+    }
+
+    @discardableResult
+    public func focusUp() -> Bool {
+        let windows = getLayout()
+        guard let currentID = focusedWindowID,
+              let current = windows.first(where: { $0.0.id == currentID }) else { return false }
+
+        let cur = current.1
+        let cy = cur.y + cur.height / 2
+
+        var best: (Window, Rect)? = nil
+        var bestDist: Double = .greatestFiniteMagnitude
+        var bestOverlap: Double = 0
+
+        for (w, r) in windows {
+            guard w.id != currentID else { continue }
+            let bottomEdge = r.y + r.height
+            guard bottomEdge <= cy else { continue }
+
+            let dist = cy - bottomEdge
+            let overlap = max(0, min(cur.x + cur.width, r.x + r.width) - max(cur.x, r.x))
+            let hasOverlap = overlap > 0
+
+            if best == nil { best = (w, r); bestDist = dist; bestOverlap = overlap; continue }
+
+            let bestHadOverlap = bestOverlap > 0
+            guard !(!hasOverlap && bestHadOverlap) else { continue }
+            guard !(hasOverlap == bestHadOverlap && dist > bestDist) else { continue }
+            guard !(hasOverlap == bestHadOverlap && dist == bestDist && overlap <= bestOverlap) else { continue }
+
+            best = (w, r); bestDist = dist; bestOverlap = overlap
+        }
+
+        guard let target = best else { return false }
+        return focusWindow(id: target.0.id)
+    }
+
+    @discardableResult
+    public func focusDown() -> Bool {
+        let windows = getLayout()
+        guard let currentID = focusedWindowID,
+              let current = windows.first(where: { $0.0.id == currentID }) else { return false }
+
+        let cur = current.1
+        let cy = cur.y + cur.height / 2
+
+        var best: (Window, Rect)? = nil
+        var bestDist: Double = .greatestFiniteMagnitude
+        var bestOverlap: Double = 0
+
+        for (w, r) in windows {
+            guard w.id != currentID else { continue }
+            let topEdge = r.y
+            guard topEdge >= cy else { continue }
+
+            let dist = topEdge - cy
+            let overlap = max(0, min(cur.x + cur.width, r.x + r.width) - max(cur.x, r.x))
+            let hasOverlap = overlap > 0
+
+            if best == nil { best = (w, r); bestDist = dist; bestOverlap = overlap; continue }
+
+            let bestHadOverlap = bestOverlap > 0
+            guard !(!hasOverlap && bestHadOverlap) else { continue }
+            guard !(hasOverlap == bestHadOverlap && dist > bestDist) else { continue }
+            guard !(hasOverlap == bestHadOverlap && dist == bestDist && overlap <= bestOverlap) else { continue }
+
+            best = (w, r); bestDist = dist; bestOverlap = overlap
+        }
+
+        guard let target = best else { return false }
+        return focusWindow(id: target.0.id)
     }
 
     // MARK: - Internal

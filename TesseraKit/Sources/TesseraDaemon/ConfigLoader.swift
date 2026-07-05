@@ -72,6 +72,8 @@ enum ConfigLoader {
                     "focusLeft": ["keyCode": 4, "flags": ["cmd", "opt"]],
                     "focusRight": ["keyCode": 37, "flags": ["cmd", "opt"]],
                     "remove": ["keyCode": 13, "flags": ["cmd", "opt"]],
+                    "focusUp": ["keyCode": 126, "flags": ["cmd", "opt"]],
+                    "focusDown": ["keyCode": 125, "flags": ["cmd", "opt"]],
                     "fullscreen": ["keyCode": 3, "flags": ["cmd", "opt"]],
                     "quit": ["keyCode": 12, "flags": ["cmd", "opt", "shift"]],
                 ] as [String: [String: Any]],
@@ -104,6 +106,10 @@ enum ConfigLoader {
             KeyBinding(keyCode: 40, flags: [.maskCommand, .maskAlternate], action: "focusLeft"),
             KeyBinding(keyCode: 38, flags: [.maskCommand, .maskAlternate], action: "focusRight"),
             KeyBinding(keyCode: 13, flags: [.maskCommand, .maskAlternate], action: "remove"),
+            KeyBinding(keyCode: 123, flags: [.maskCommand, .maskAlternate], action: "focusLeft"),   // ←
+            KeyBinding(keyCode: 124, flags: [.maskCommand, .maskAlternate], action: "focusRight"),  // →
+            KeyBinding(keyCode: 125, flags: [.maskCommand, .maskAlternate], action: "focusDown"),   // ↓
+            KeyBinding(keyCode: 126, flags: [.maskCommand, .maskAlternate], action: "focusUp"),     // ↑
             KeyBinding(keyCode: 3, flags: [.maskCommand, .maskAlternate], action: "fullscreen"),
             KeyBinding(keyCode: 12, flags: [.maskCommand, .maskAlternate, .maskShift], action: "quit"),
         ]
@@ -131,7 +137,7 @@ enum ConfigLoader {
         for (actionName, hotkey) in hotkeys {
             let flags = parseFlags(hotkey.flags)
             let binding = KeyBinding(keyCode: hotkey.keyCode, flags: flags, action: actionName)
-            result.removeAll { $0.action == actionName }
+            result.removeAll { $0.keyCode == hotkey.keyCode }
             result.append(binding)
         }
         return result

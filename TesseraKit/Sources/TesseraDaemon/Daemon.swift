@@ -97,6 +97,8 @@ final class Daemon: @unchecked Sendable {
         print("  ⌘⌥K/L — focus left/right")
         print("  ⌘⌥W  — remove focused window")
         print("  ⌘⌥⇧Q — quit")
+        print("  ⌘⌥arrows — focus directionally")
+        print("  ⌘⌥HJKL  — vim-style directional focus")
         print("  ⌘⌥F   — toggle fullscreen")
         print("Listening for keyDown events...")
 
@@ -201,6 +203,30 @@ final class Daemon: @unchecked Sendable {
         guard let focusedID = ws.focusedWindowID else { print("[focus] no focused window"); return }
         if mapper.focusWindow(id: focusedID) {
             print("[focus] → right")
+        } else {
+            print("[focus] failed to focus window")
+        }
+    }
+
+    func focusUp() {
+        guard let ws = currentWorkspace else { print("[focus] no workspace — tile first"); return }
+        guard let mapper = currentMapper else { print("[focus] no mapper — tile first"); return }
+        guard ws.focusUp() else { print("[focus] already at topmost"); return }
+        guard let focusedID = ws.focusedWindowID else { print("[focus] no focused window"); return }
+        if mapper.focusWindow(id: focusedID) {
+            print("[focus] ↑ up")
+        } else {
+            print("[focus] failed to focus window")
+        }
+    }
+
+    func focusDown() {
+        guard let ws = currentWorkspace else { print("[focus] no workspace — tile first"); return }
+        guard let mapper = currentMapper else { print("[focus] no mapper — tile first"); return }
+        guard ws.focusDown() else { print("[focus] already at bottommost"); return }
+        guard let focusedID = ws.focusedWindowID else { print("[focus] no focused window"); return }
+        if mapper.focusWindow(id: focusedID) {
+            print("[focus] ↓ down")
         } else {
             print("[focus] failed to focus window")
         }
@@ -340,15 +366,27 @@ private let eventTapCallback: CGEventTapCallBack = { proxy, type, event, userInf
             CFRunLoopWakeUp(CFRunLoopGetMain())
             print("[event] swallowed (tile)")
             return nil
-        case "focusLeft":
+        case "focusLeft", "focus-left":
             CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue) {
                 daemon.focusLeft()
             }
             CFRunLoopWakeUp(CFRunLoopGetMain())
             return nil
-        case "focusRight":
+        case "focusRight", "focus-right":
             CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue) {
                 daemon.focusRight()
+            }
+            CFRunLoopWakeUp(CFRunLoopGetMain())
+            return nil
+        case "focusUp":
+            CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue) {
+                daemon.focusUp()
+            }
+            CFRunLoopWakeUp(CFRunLoopGetMain())
+            return nil
+        case "focusDown":
+            CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue) {
+                daemon.focusDown()
             }
             CFRunLoopWakeUp(CFRunLoopGetMain())
             return nil
