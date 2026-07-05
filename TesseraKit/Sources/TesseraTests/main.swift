@@ -350,6 +350,29 @@ func testKeyBindingExtraFlagsStillMatches() throws {
     try assert(binding.matches(event: event))
 }
 
+// MARK: - Fullscreen binding
+
+func testKeyBindingFullscreenMatches() throws {
+    let event = CGEvent(keyboardEventSource: nil, virtualKey: 3, keyDown: true)!
+    event.flags = [.maskCommand, .maskAlternate]
+    let binding = KeyBinding(keyCode: 3, flags: [.maskCommand, .maskAlternate], action: "fullscreen")
+    try assert(binding.matches(event: event))
+}
+
+func testKeyBindingFullscreenWrongKeyCode() throws {
+    let event = CGEvent(keyboardEventSource: nil, virtualKey: 36, keyDown: true)!  // Return, not F
+    event.flags = [.maskCommand, .maskAlternate]
+    let binding = KeyBinding(keyCode: 3, flags: [.maskCommand, .maskAlternate], action: "fullscreen")
+    try assert(!binding.matches(event: event))
+}
+
+func testKeyBindingFullscreenMissingFlags() throws {
+    let event = CGEvent(keyboardEventSource: nil, virtualKey: 3, keyDown: true)!
+    event.flags = [.maskCommand]  // missing alternate
+    let binding = KeyBinding(keyCode: 3, flags: [.maskCommand, .maskAlternate], action: "fullscreen")
+    try assert(!binding.matches(event: event))
+}
+
 // MARK: - Runner
 
 let tests: [(String, () throws -> Void)] = [
@@ -386,6 +409,10 @@ let tests: [(String, () throws -> Void)] = [
     ("KeyBinding wrong keyCode does not match", testKeyBindingWrongKeyCodeDoesNotMatch),
     ("KeyBinding missing flags does not match", testKeyBindingMissingFlagsDoesNotMatch),
     ("KeyBinding extra flags still matches", testKeyBindingExtraFlagsStillMatches),
+    // Fullscreen binding
+    ("KeyBinding fullscreen matches", testKeyBindingFullscreenMatches),
+    ("KeyBinding fullscreen wrong keyCode", testKeyBindingFullscreenWrongKeyCode),
+    ("KeyBinding fullscreen missing flags", testKeyBindingFullscreenMissingFlags),
 ]
 
 var passed = 0
