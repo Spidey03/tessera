@@ -35,8 +35,6 @@ final class Daemon: @unchecked Sendable {
     private var recentlyTiled = false
     /// IDs of config-floaters already centered (never re-center on subsequent tiles)
     private var centeredFloaterIDs: Set<String> = []
-    /// IDs of windows that overflowed the screen and were floated (excluded from BSP tree on subsequent tiles)
-    private var overflowedIDs: Set<String> = []
     /// ID of the window currently in fullscreen mode, if any (nil = not in fullscreen)
     private var fullscreenWindowID: String? = nil
     /// Fingerprints of last known tileable windows (appPID + geometry) to skip no-op auto-tiles
@@ -119,17 +117,16 @@ final class Daemon: @unchecked Sendable {
     /// Saves workspace + mapper state for subsequent focus/remove operations.
     func tileWithSuppression() {
         observer.isSuppressed = true
-        let result = tiler.tileAllWindows(overflowedIDs: overflowedIDs)
-        if let (ws, mapper, newOverflowed) = result {
+        let result = tiler.tileAllWindows()
+        if let (ws, mapper, newlyFloated) = result {
             currentWorkspace = ws
             currentMapper = mapper
-            overflowedIDs = newOverflowed
+            // Center NEW config-floaters and overflowed/undersized windows; stagger to avoid overlap
+            centerNewFloaters(newlyFloated: newlyFloated)
         }
         observer.isSuppressed = false
         subscribeAllToDestroyed()
         fullscreenWindowID = nil
-        // Center NEW config-floaters and overflowed/undersized windows; stagger to avoid overlap
-        centerNewFloaters(overflowedIDs: overflowedIDs)
         // Refresh fingerprint cache so subsequent auto-tiles can diff accurately
         let currentWindows = tiler.filterWindows(WindowDiscovery.allWindows())
         lastTileableFingerprints = Set(currentWindows.map { "\($0.appPID):\(Int($0.position.x)):\(Int($0.position.y)):\(Int($0.size.width)):\(Int($0.size.height))" })
@@ -142,14 +139,14 @@ final class Daemon: @unchecked Sendable {
         }
     }
 
-    private func centerNewFloaters(overflowedIDs: Set<String> = []) {
+    private func centerNewFloaters(newlyFloated: Set<String> = []) {
         guard let mapper = currentMapper else { return }
         let configFloaterBundleIDs = Set(tiler.config.floatingAppIDs)
         var newFloaters = mapper.allWindows
             .filter { configFloaterBundleIDs.contains($0.bundleID ?? "") && !centeredFloaterIDs.contains($0.id) }
         // Also center newly overflowed/undersized windows (but only once)
         let alreadyCentered = centeredFloaterIDs
-        for win in mapper.allWindows where overflowedIDs.contains(win.id) && !alreadyCentered.contains(win.id) {
+        for win in mapper.allWindows where newlyFloated.contains(win.id) && !alreadyCentered.contains(win.id) {
             newFloaters.append(win)
         }
         newFloaters.sort { $0.id < $1.id }

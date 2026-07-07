@@ -6,10 +6,8 @@ struct Tiler {
     let config: TesseraConfig
 
     /// Returns the workspace + mapper state for subsequent focus/remove operations.
-    /// - Parameter overflowedIDs: IDs of windows that previously overflowed the screen and were floated.
-    ///   These are excluded from the BSP tree (treated like config-floaters) in subsequent tiles.
     @discardableResult
-    func tileAllWindows(overflowedIDs: Set<String> = []) -> (workspace: Workspace, mapper: WindowMapper, overflowedIDs: Set<String>)? {
+    func tileAllWindows() -> (workspace: Workspace, mapper: WindowMapper, newlyFloated: Set<String>)? {
         let allWindows = WindowDiscovery.allWindows()
         let windows = filterWindows(allWindows)
 
@@ -28,14 +26,13 @@ struct Tiler {
         let screenRect = screenRect()
         print("[tiler] screen rect: \(screenRect)")
 
-        // Separate config-floaters + previously overflowed (never enter BSP tree) from tiled candidates
+        // Separate config-floaters (never enter BSP tree) from tiled candidates
         let configFloaterBundleIDs = Set(config.floatingAppIDs)
         let floaterIDs = Set(windows.filter { configFloaterBundleIDs.contains($0.bundleID ?? "") }.map(\.id))
-        let alwaysExcluded = floaterIDs.union(overflowedIDs)
-        let tiledIDs = Set(windows.map(\.id)).subtracting(alwaysExcluded)
+        let tiledIDs = Set(windows.map(\.id)).subtracting(floaterIDs)
 
         var mapper = WindowMapper(realWindows: windows)
-        print("[tiler] mapped \(mapper.pureWindows.count) pure windows (\(tiledIDs.count) tiled, \(floaterIDs.count) floating)")
+        print("[tiler] mapped \(mapper.pureWindows.count) pure windows (\(tiledIDs.count) tiled, \(floaterIDs.count) config-floated)")
 
         // Build BSP tree with only tiled windows
         let workspace = Workspace(monitorRect: screenRect, config: config)
@@ -73,9 +70,9 @@ struct Tiler {
             allFloated.formUnion(floated)
         }
 
-        let newOverflowed = overflowedIDs.union(allFloated)
-        print("[tiler] layout applied ✓ (\(tiledIDs.count - newOverflowed.count) tiled, \(newOverflowed.count) excluded)")
-        return (resultWorkspace, mapper, newOverflowed)
+        let tiledCount = max(0, tiledIDs.count - allFloated.count)
+        print("[tiler] layout applied ✓ (\(tiledCount) tiled, \(allFloated.count) floated)")
+        return (resultWorkspace, mapper, allFloated)
     }
 
     func filterWindows(_ allWindows: [MacWindow]) -> [MacWindow] {
