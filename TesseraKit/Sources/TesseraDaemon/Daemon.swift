@@ -39,6 +39,8 @@ final class Daemon: @unchecked Sendable {
     private var overflowedIDs: Set<String> = []
     /// ID of the window currently in fullscreen mode, if any (nil = not in fullscreen)
     private var fullscreenWindowID: String? = nil
+    /// Fingerprints of last known tileable windows (appPID + geometry) to skip no-op auto-tiles
+    private var lastTileableFingerprints: Set<String> = []
 
     init(tiler: Tiler, bindings: [KeyBinding]) {
         self.tiler = tiler
@@ -77,7 +79,14 @@ final class Daemon: @unchecked Sendable {
         // Set up the auto-tile callback with suppression
         observer.onChange = { [weak self] in
             guard let self, !recentlyTiled else { return }
-            print("[auto-tile] window change detected — tiling")
+            let windows = tiler.filterWindows(WindowDiscovery.allWindows())
+            let fingerprints = Set(windows.map { "\($0.appPID):\(Int($0.position.x)):\(Int($0.position.y)):\(Int($0.size.width)):\(Int($0.size.height))" })
+            guard fingerprints != lastTileableFingerprints else {
+                print("[auto-tile] tileable windows unchanged — skipping")
+                return
+            }
+            lastTileableFingerprints = fingerprints
+            print("[auto-tile] tileable change detected — tiling")
             self.tileWithSuppression()
         }
         observer.start()
@@ -119,8 +128,12 @@ final class Daemon: @unchecked Sendable {
         observer.isSuppressed = false
         subscribeAllToDestroyed()
         fullscreenWindowID = nil
-        // Center NEW config-floaters only; stagger to avoid overlap
-        centerNewFloaters()
+        // Center NEW config-floaters and overflowed/undersized windows; stagger to avoid overlap
+        centerNewFloaters(overflowedIDs: overflowedIDs)
+        // Refresh fingerprint cache so subsequent auto-tiles can diff accurately
+        let currentWindows = tiler.filterWindows(WindowDiscovery.allWindows())
+        lastTileableFingerprints = Set(currentWindows.map { "\($0.appPID):\(Int($0.position.x)):\(Int($0.position.y)):\(Int($0.size.width)):\(Int($0.size.height))" })
+
         // Prevent spurious re-tiles from transient windows created during resize.
         // Must outlast the 50ms AX debounce interval + notification delivery window.
         recentlyTiled = true
@@ -129,12 +142,17 @@ final class Daemon: @unchecked Sendable {
         }
     }
 
-    private func centerNewFloaters() {
+    private func centerNewFloaters(overflowedIDs: Set<String> = []) {
         guard let mapper = currentMapper else { return }
         let configFloaterBundleIDs = Set(tiler.config.floatingAppIDs)
-        let newFloaters = mapper.allWindows
+        var newFloaters = mapper.allWindows
             .filter { configFloaterBundleIDs.contains($0.bundleID ?? "") && !centeredFloaterIDs.contains($0.id) }
-            .sorted { $0.id < $1.id }
+        // Also center newly overflowed/undersized windows (but only once)
+        let alreadyCentered = centeredFloaterIDs
+        for win in mapper.allWindows where overflowedIDs.contains(win.id) && !alreadyCentered.contains(win.id) {
+            newFloaters.append(win)
+        }
+        newFloaters.sort { $0.id < $1.id }
         guard !newFloaters.isEmpty else { return }
         var updatedMapper = mapper
         var staggerIndex = 0

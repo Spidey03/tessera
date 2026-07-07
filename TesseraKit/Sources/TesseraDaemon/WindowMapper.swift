@@ -82,6 +82,10 @@ public struct WindowMapper {
                 if windowBottom > screenBottom + tolerance || windowRight > screenRight + tolerance {
                     floatedIDs.insert(pureWin.id)
                     print("[mapper]   \(macWin.appName): \"\(macWin.title)\" → out of bounds, keeping at (\(Int(macWin.position.x)),\(Int(macWin.position.y)))")
+                } else if cgRect.width > 0 && cgRect.height > 0 &&
+                          (actualSize.width < cgRect.width * 0.5 || actualSize.height < cgRect.height * 0.5) {
+                    floatedIDs.insert(pureWin.id)
+                    print("[mapper]   \(macWin.appName): \"\(macWin.title)\" → undersized at \(Int(actualSize.width))x\(Int(actualSize.height)) (tile: \(Int(cgRect.width))x\(Int(cgRect.height))), keeping at (\(Int(macWin.position.x)),\(Int(macWin.position.y)))")
                 } else {
                     macWin.setPosition(cgRect.origin)
                     print("[mapper]   \(macWin.appName): \"\(macWin.title)\" → pos(\(Int(rect.x)),\(Int(rect.y))) size(\(Int(actualSize.width))x\(Int(actualSize.height)))")

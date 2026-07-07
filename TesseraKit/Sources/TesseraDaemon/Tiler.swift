@@ -51,6 +51,7 @@ struct Tiler {
 
         // Apply layout — windows that overflow the screen will be floated
         var floated = mapper.applyLayout(layout, screenRect: screenRect)
+        var allFloated = floated
 
         // Cascade: if a tiled window overflowed, rebuild the tree without it
         var resultWorkspace = workspace
@@ -69,9 +70,10 @@ struct Tiler {
             let newLayout = resultWorkspace.getLayout()
             if newLayout.isEmpty { break }
             floated = mapper.applyLayout(newLayout, screenRect: screenRect)
+            allFloated.formUnion(floated)
         }
 
-        let newOverflowed = overflowedIDs.union(floated)
+        let newOverflowed = overflowedIDs.union(allFloated)
         print("[tiler] layout applied ✓ (\(tiledIDs.count - newOverflowed.count) tiled, \(newOverflowed.count) excluded)")
         return (resultWorkspace, mapper, newOverflowed)
     }
