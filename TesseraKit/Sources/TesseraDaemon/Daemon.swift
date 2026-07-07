@@ -118,11 +118,14 @@ final class Daemon: @unchecked Sendable {
     func tileWithSuppression() {
         observer.isSuppressed = true
         let result = tiler.tileAllWindows()
-        if let (ws, mapper, newlyFloated) = result {
+        if let (ws, mapper, newlyFloated, animationTargets) = result {
+            let startPositions = mapper.allWindows
+                .filter { animationTargets.keys.contains($0.id) }
+                .reduce(into: [:]) { $0[$1.id] = $1.position }
             currentWorkspace = ws
             currentMapper = mapper
-            // Center NEW config-floaters and overflowed/undersized windows; stagger to avoid overlap
             centerNewFloaters(newlyFloated: newlyFloated)
+            animateWindows(targets: animationTargets, startPositions: startPositions)
         }
         observer.isSuppressed = false
         subscribeAllToDestroyed()
@@ -132,10 +135,48 @@ final class Daemon: @unchecked Sendable {
         lastTileableFingerprints = Set(currentWindows.map { "\($0.appPID):\(Int($0.position.x)):\(Int($0.position.y)):\(Int($0.size.width)):\(Int($0.size.height))" })
 
         // Prevent spurious re-tiles from transient windows created during resize.
-        // Must outlast the 50ms AX debounce interval + notification delivery window.
+        // Must outlast animation (150ms) + AX debounce interval + notification delivery window.
         recentlyTiled = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             self?.recentlyTiled = false
+        }
+    }
+
+    private func animateWindows(targets: [String: CGPoint], startPositions: [String: CGPoint], steps: Int = 8, duration: TimeInterval = 0.15) {
+        guard !targets.isEmpty else { return }
+        let interval = duration / Double(max(steps, 1))
+        print("[animate] sliding \(targets.count) windows — \(steps) steps over \(Int(duration * 1000))ms")
+
+        for i in 1...steps {
+            let t = Double(i) / Double(steps)
+            let eased = t < 1 ? 1 - pow(1 - t, 2) : 1.0
+            DispatchQueue.main.asyncAfter(deadline: .now() + interval * Double(i)) { [weak self] in
+                guard let self else { return }
+                for (id, targetPos) in targets {
+                    guard let macWin = self.currentMapper?.window(withID: id) else { continue }
+                    let startPos = startPositions[id] ?? targetPos
+                    let x = startPos.x + (targetPos.x - startPos.x) * eased
+                    let y = startPos.y + (targetPos.y - startPos.y) * eased
+                    var pt = CGPoint(x: x, y: y)
+                    if let axValue = AXValueCreate(.cgPoint, &pt) {
+                        AXUIElementSetAttributeValue(macWin.windowRef, kAXPositionAttribute as CFString, axValue)
+                    }
+                }
+                // Last frame: snap exact and update cached positions
+                if i == steps {
+                    for (id, targetPos) in targets {
+                        var pt = targetPos
+                        if let axValue = AXValueCreate(.cgPoint, &pt),
+                           let macWin = self.currentMapper?.window(withID: id) {
+                            AXUIElementSetAttributeValue(macWin.windowRef, kAXPositionAttribute as CFString, axValue)
+                        }
+                    }
+                    if var mapper = self.currentMapper {
+                        mapper.updatePositions(targets)
+                        self.currentMapper = mapper
+                    }
+                }
+            }
         }
     }
 

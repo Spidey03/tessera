@@ -43,6 +43,14 @@ public struct WindowMapper {
         return true
     }
 
+    public mutating func updatePositions(_ positions: [String: CGPoint]) {
+        for (id, pos) in positions {
+            guard var macWin = mapping[id] else { continue }
+            macWin.position = pos
+            mapping[id] = macWin
+        }
+    }
+
     public var pureWindows: [Window] {
         // Sort by position (top-to-bottom, left-to-right) so the BSP tree
         // layout is deterministic and stable across consecutive tiles.
@@ -53,6 +61,55 @@ public struct WindowMapper {
                 return (a.appName, a.title) < (b.appName, b.title)
             }
             .map { Window(id: $0.id) }
+    }
+
+    /// Like applyLayout but does NOT move windows — only resizes them for overflow detection
+    /// and returns the target positions. Use animateTo to smoothly move windows to these targets.
+    @discardableResult
+    public mutating func computeLayout(_ layout: [(Window, Rect)], screenRect: Rect) -> (targets: [String: CGPoint], floatedIDs: Set<String>) {
+        var targets: [String: CGPoint] = [:]
+        var floatedIDs: Set<String> = []
+        var moved = 0
+        let tolerance: CGFloat = 5
+        let visibleBounds = CGRect(x: screenRect.x, y: screenRect.y,
+                                   width: screenRect.width, height: screenRect.height)
+
+        for (pureWin, rect) in layout {
+            guard var macWin = mapping[pureWin.id] else {
+                print("[mapper]   SKIP: \(pureWin.id) not found in mapping")
+                continue
+            }
+            let cgRect = CGRect(x: rect.x, y: rect.y, width: rect.width, height: rect.height)
+
+            macWin.setSize(cgRect.size)
+
+            if let actualSize = macWin.actualSize() {
+                let windowBottom = cgRect.origin.y + actualSize.height
+                let windowRight = cgRect.origin.x + actualSize.width
+                let screenBottom = visibleBounds.origin.y + visibleBounds.height
+                let screenRight = visibleBounds.origin.x + visibleBounds.width
+
+                if windowBottom > screenBottom + tolerance || windowRight > screenRight + tolerance {
+                    floatedIDs.insert(pureWin.id)
+                    print("[mapper]   \(macWin.appName): \"\(macWin.title)\" → out of bounds, keeping at (\(Int(macWin.position.x)),\(Int(macWin.position.y)))")
+                } else if cgRect.width > 0 && cgRect.height > 0 &&
+                          (actualSize.width < cgRect.width * 0.5 || actualSize.height < cgRect.height * 0.5) {
+                    floatedIDs.insert(pureWin.id)
+                    print("[mapper]   \(macWin.appName): \"\(macWin.title)\" → undersized at \(Int(actualSize.width))x\(Int(actualSize.height)) (tile: \(Int(cgRect.width))x\(Int(cgRect.height))), keeping at (\(Int(macWin.position.x)),\(Int(macWin.position.y)))")
+                } else {
+                    targets[pureWin.id] = cgRect.origin
+                    print("[mapper]   \(macWin.appName): \"\(macWin.title)\" → tile at (\(Int(rect.x)),\(Int(rect.y))) size(\(Int(actualSize.width))x\(Int(actualSize.height)))")
+                }
+            } else {
+                targets[pureWin.id] = cgRect.origin
+                print("[mapper]   \(macWin.appName): \"\(macWin.title)\" → tile at (\(Int(rect.x)),\(Int(rect.y))) size(\(Int(rect.width))x\(Int(rect.height)))")
+            }
+
+            mapping[pureWin.id] = macWin
+            moved += 1
+        }
+        print("[mapper] layout computed: \(moved) evaluated (\(targets.count) to tile, \(floatedIDs.count) floated)")
+        return (targets, floatedIDs)
     }
 
     @discardableResult

@@ -7,7 +7,7 @@ struct Tiler {
 
     /// Returns the workspace + mapper state for subsequent focus/remove operations.
     @discardableResult
-    func tileAllWindows() -> (workspace: Workspace, mapper: WindowMapper, newlyFloated: Set<String>)? {
+    func tileAllWindows() -> (workspace: Workspace, mapper: WindowMapper, newlyFloated: Set<String>, animationTargets: [String: CGPoint])? {
         let allWindows = WindowDiscovery.allWindows()
         let windows = filterWindows(allWindows)
 
@@ -46,9 +46,10 @@ struct Tiler {
             print("[tiler]   \(win.id) → \(rect)")
         }
 
-        // Apply layout — windows that overflow the screen will be floated
-        var floated = mapper.applyLayout(layout, screenRect: screenRect)
+        // Compute layout (resize for overflow detection but don't move windows)
+        var (targets, floated) = mapper.computeLayout(layout, screenRect: screenRect)
         var allFloated = floated
+        var finalTargets = targets
 
         // Cascade: if a tiled window overflowed, rebuild the tree without it
         var resultWorkspace = workspace
@@ -66,13 +67,14 @@ struct Tiler {
             }
             let newLayout = resultWorkspace.getLayout()
             if newLayout.isEmpty { break }
-            floated = mapper.applyLayout(newLayout, screenRect: screenRect)
+            (targets, floated) = mapper.computeLayout(newLayout, screenRect: screenRect)
+            finalTargets = targets
             allFloated.formUnion(floated)
         }
 
         let tiledCount = max(0, tiledIDs.count - allFloated.count)
         print("[tiler] layout applied ✓ (\(tiledCount) tiled, \(allFloated.count) floated)")
-        return (resultWorkspace, mapper, allFloated)
+        return (resultWorkspace, mapper, allFloated, finalTargets)
     }
 
     func filterWindows(_ allWindows: [MacWindow]) -> [MacWindow] {
