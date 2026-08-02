@@ -14,6 +14,9 @@ struct TesseraConfigFile: Codable {
     var outerGap: Double?
     var newWindowFocus: Bool?
     var floatingApps: [String]?
+    var animationEnabled: Bool?
+    var animationSteps: Int?
+    var animationDuration: Double?
     var hotkeys: [String: HotkeyConfig]?
 }
 
@@ -67,6 +70,9 @@ enum ConfigLoader {
                 "outerGap": 4.0,
                 "newWindowFocus": false,
                 "floatingApps": ["com.spotify.client"],
+                "animationEnabled": true,
+                "animationSteps": 8,
+                "animationDuration": 0.15,
                 "hotkeys": [
                     "tile": ["keyCode": 36, "flags": ["cmd", "opt"]],
                     "focusLeft": ["keyCode": 4, "flags": ["cmd", "opt"]],
@@ -90,11 +96,15 @@ enum ConfigLoader {
 
     private static func mergeConfig(_ fileConfig: TesseraConfigFile?) -> TesseraConfig {
         guard let fc = fileConfig else { return TesseraConfig() }
+        let defaults = TesseraConfig()
         return TesseraConfig(
-            gapSize: fc.gapSize ?? TesseraConfig().gapSize,
-            outerGap: fc.outerGap ?? TesseraConfig().outerGap,
-            newWindowFocus: fc.newWindowFocus ?? TesseraConfig().newWindowFocus,
-            floatingAppIDs: fc.floatingApps ?? TesseraConfig().floatingAppIDs
+            gapSize: fc.gapSize ?? defaults.gapSize,
+            outerGap: fc.outerGap ?? defaults.outerGap,
+            newWindowFocus: fc.newWindowFocus ?? defaults.newWindowFocus,
+            floatingAppIDs: fc.floatingApps ?? defaults.floatingAppIDs,
+            animationEnabled: fc.animationEnabled ?? defaults.animationEnabled,
+            animationSteps: fc.animationSteps ?? defaults.animationSteps,
+            animationDuration: fc.animationDuration ?? defaults.animationDuration
         )
     }
 

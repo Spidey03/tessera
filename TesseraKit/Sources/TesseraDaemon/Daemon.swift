@@ -125,7 +125,23 @@ final class Daemon: @unchecked Sendable {
             currentWorkspace = ws
             currentMapper = mapper
             centerNewFloaters(newlyFloated: newlyFloated)
-            animateWindows(targets: animationTargets, startPositions: startPositions)
+            if tiler.config.animationEnabled && !animationTargets.isEmpty {
+                animateWindows(targets: animationTargets, startPositions: startPositions,
+                               steps: tiler.config.animationSteps,
+                               duration: tiler.config.animationDuration)
+            } else if !animationTargets.isEmpty {
+                for (id, pos) in animationTargets {
+                    guard let macWin = mapper.window(withID: id) else { continue }
+                    var pt = pos
+                    if let axValue = AXValueCreate(.cgPoint, &pt) {
+                        AXUIElementSetAttributeValue(macWin.windowRef, kAXPositionAttribute as CFString, axValue)
+                    }
+                }
+                var m = mapper
+                m.updatePositions(animationTargets)
+                currentMapper = m
+                print("[tile] instant placement: \(animationTargets.count) window(s)")
+            }
         }
         observer.isSuppressed = false
         subscribeAllToDestroyed()
@@ -135,14 +151,15 @@ final class Daemon: @unchecked Sendable {
         lastTileableFingerprints = Set(currentWindows.map { "\($0.appPID):\(Int($0.position.x)):\(Int($0.position.y)):\(Int($0.size.width)):\(Int($0.size.height))" })
 
         // Prevent spurious re-tiles from transient windows created during resize.
-        // Must outlast animation (150ms) + AX debounce interval + notification delivery window.
+        // Must outlast animation + AX debounce interval + notification delivery window.
+        let cooldown = max(0.5, tiler.config.animationDuration + 0.35)
         recentlyTiled = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + cooldown) { [weak self] in
             self?.recentlyTiled = false
         }
     }
 
-    private func animateWindows(targets: [String: CGPoint], startPositions: [String: CGPoint], steps: Int = 8, duration: TimeInterval = 0.15) {
+    private func animateWindows(targets: [String: CGPoint], startPositions: [String: CGPoint], steps: Int, duration: TimeInterval) {
         guard !targets.isEmpty else { return }
         let interval = duration / Double(max(steps, 1))
         print("[animate] sliding \(targets.count) windows — \(steps) steps over \(Int(duration * 1000))ms")
