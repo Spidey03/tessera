@@ -163,10 +163,10 @@ public struct WindowMapper {
     }
 
     @discardableResult
-    public mutating func centerOnScreen(id: String, staggerIndex: Int = 0) -> Bool {
+    public mutating func centerOnScreen(id: String, screenRect: Rect, staggerIndex: Int = 0) -> Bool {
         guard var macWin = mapping[id] else { return false }
         let actual = macWin.actualSize() ?? macWin.size
-        let pos = screenCenter(size: actual, staggerIndex: staggerIndex)
+        let pos = screenCenter(size: actual, screenRect: screenRect, staggerIndex: staggerIndex)
         if macWin.setPosition(pos) {
             mapping[id] = macWin
             print("[mapper]   \(macWin.appName): \"\(macWin.title)\" → centered on screen at (\(Int(pos.x)),\(Int(pos.y)))")
@@ -175,14 +175,12 @@ public struct WindowMapper {
         return false
     }
 
-    private func screenCenter(size: CGSize, staggerIndex: Int = 0) -> CGPoint {
-        let visibleFrame = NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 33, width: 1512, height: 944)
-        let screenFrame = NSScreen.main?.frame ?? CGRect(x: 0, y: 0, width: 1512, height: 982)
-        let topInset = round(screenFrame.height - visibleFrame.origin.y - visibleFrame.height)
-        let cx = visibleFrame.origin.x + (visibleFrame.width - size.width) / 2
-        let cy = topInset + (visibleFrame.height - size.height) / 2
+    private func screenCenter(size: CGSize, screenRect: Rect, staggerIndex: Int = 0) -> CGPoint {
+        let top = screenRect.y
+        let cx = screenRect.x + (screenRect.width - Double(size.width)) / 2
+        let cy = top + (screenRect.height - Double(size.height)) / 2
         let staggerOffset: CGFloat = 28 * CGFloat(staggerIndex)
-        return CGPoint(x: max(cx + staggerOffset, 0), y: max(cy + staggerOffset, topInset))
+        return CGPoint(x: max(cx + staggerOffset, 0), y: max(cy + staggerOffset, top))
     }
 }
 

@@ -27,23 +27,23 @@ final class Daemon: @unchecked Sendable {
     let bindings: [KeyBinding]
     let observer: WindowObserver
 
-    /// Persistent BSP workspace state across operations
-    var currentWorkspace: Workspace?
-    /// Persistent window mapping across operations
-    var currentMapper: WindowMapper?
+    /// Persistent BSP workspace state per display
+    var currentWorkspaces: [CGDirectDisplayID: Workspace] = [:]
+    /// Persistent window mapping per display
+    var currentMappers: [CGDirectDisplayID: WindowMapper] = [:]
     /// Cooldown flag to suppress spurious re-tiles from transient windows created during resize
     private var recentlyTiled = false
     /// IDs of config-floaters already centered (never re-center on subsequent tiles)
     private var centeredFloaterIDs: Set<String> = []
     /// ID of the window currently in fullscreen mode, if any (nil = not in fullscreen)
     private var fullscreenWindowID: String? = nil
-    /// Fingerprints of last known tileable windows (appPID + geometry) to skip no-op auto-tiles
-    private var lastTileableFingerprints: Set<String> = []
+    /// Fingerprints of last known tileable windows per display (appPID + geometry) to skip no-op auto-tiles
+    private var lastTileableFingerprints: [CGDirectDisplayID: Set<String>] = [:]
 
     init(tiler: Tiler, bindings: [KeyBinding]) {
         self.tiler = tiler
         self.bindings = bindings
-        self.observer = WindowObserver(debounce: 0.05)
+        self.observer = WindowObserver(debounce: 0.05, dragDebounce: 0.25)
     }
 
     func run() {
@@ -77,14 +77,20 @@ final class Daemon: @unchecked Sendable {
         // Set up the auto-tile callback with suppression
         observer.onChange = { [weak self] in
             guard let self, !recentlyTiled else { return }
-            let windows = tiler.filterWindows(WindowDiscovery.allWindows())
-            let fingerprints = Set(windows.map { "\($0.appPID):\(Int($0.position.x)):\(Int($0.position.y)):\(Int($0.size.width)):\(Int($0.size.height))" })
-            guard fingerprints != lastTileableFingerprints else {
+            let fingerprints = self.currentFingerprintsByDisplay()
+            let changedDisplays = fingerprints.keys.filter { fingerprints[$0] != lastTileableFingerprints[$0] }
+            guard !changedDisplays.isEmpty else {
                 print("[auto-tile] tileable windows unchanged — skipping")
                 return
             }
             lastTileableFingerprints = fingerprints
-            print("[auto-tile] tileable change detected — tiling")
+            print("[auto-tile] change on \(changedDisplays.count) display(s) — tiling")
+            self.tileWithSuppression()
+        }
+        // Re-tile when display configuration changes (hotplug, resolution, arrangement)
+        observer.onScreensChanged = { [weak self] in
+            guard let self, !recentlyTiled else { return }
+            print("[screens] display configuration changed — re-tiling")
             self.tileWithSuppression()
         }
         observer.start()
@@ -113,56 +119,87 @@ final class Daemon: @unchecked Sendable {
         CFRunLoopRun()
     }
 
+    // MARK: - Fingerprints
+
+    private func currentFingerprintsByDisplay() -> [CGDirectDisplayID: Set<String>] {
+        var result: [CGDirectDisplayID: Set<String>] = [:]
+        for w in tiler.filterWindows(WindowDiscovery.allWindows()) {
+            guard let display = ScreenManager.display(containing: w.frame) else { continue }
+            result[display.id, default: []].insert("\(w.appPID):\(Int(w.position.x)):\(Int(w.position.y)):\(Int(w.size.width)):\(Int(w.size.height))")
+        }
+        return result
+    }
+
+    // MARK: - Tiling
+
     /// Tile while suppressing AX notifications to avoid loops.
-    /// Saves workspace + mapper state for subsequent focus/remove operations.
+    /// Saves per-display workspace + mapper state for subsequent focus/remove operations.
     func tileWithSuppression() {
         observer.isSuppressed = true
-        let result = tiler.tileAllWindows()
-        if let (ws, mapper, newlyFloated, animationTargets) = result {
+        let results = tiler.tileAllWindows()
+
+        // Update per-display state and prune displays that disappeared
+        let liveIDs = Set(ScreenManager.displays.map(\.id))
+        for (displayID, result) in results {
+            currentWorkspaces[displayID] = result.workspace
+            currentMappers[displayID] = result.mapper
+        }
+        currentWorkspaces = currentWorkspaces.filter { liveIDs.contains($0.key) }
+        currentMappers = currentMappers.filter { liveIDs.contains($0.key) }
+
+        for (displayID, result) in results {
+            guard let mapper = currentMappers[displayID] else { continue }
             let startPositions = mapper.allWindows
-                .filter { animationTargets.keys.contains($0.id) }
+                .filter { result.animationTargets.keys.contains($0.id) }
                 .reduce(into: [:]) { $0[$1.id] = $1.position }
-            currentWorkspace = ws
-            currentMapper = mapper
-            centerNewFloaters(newlyFloated: newlyFloated)
-            if tiler.config.animationEnabled && !animationTargets.isEmpty {
-                animateWindows(targets: animationTargets, startPositions: startPositions,
+            centerNewFloaters(displayID: displayID, newlyFloated: result.newlyFloated)
+            if tiler.config.animationEnabled && !result.animationTargets.isEmpty {
+                animateWindows(displayID: displayID, targets: result.animationTargets, startPositions: startPositions,
                                steps: tiler.config.animationSteps,
                                duration: tiler.config.animationDuration)
-            } else if !animationTargets.isEmpty {
-                for (id, pos) in animationTargets {
-                    guard let macWin = mapper.window(withID: id) else { continue }
+            } else if !result.animationTargets.isEmpty {
+                guard var instantMapper = currentMappers[displayID] else { continue }
+                for (id, pos) in result.animationTargets {
+                    guard let macWin = instantMapper.window(withID: id) else { continue }
                     var pt = pos
                     if let axValue = AXValueCreate(.cgPoint, &pt) {
                         AXUIElementSetAttributeValue(macWin.windowRef, kAXPositionAttribute as CFString, axValue)
                     }
                 }
-                var m = mapper
-                m.updatePositions(animationTargets)
-                currentMapper = m
-                print("[tile] instant placement: \(animationTargets.count) window(s)")
+                instantMapper.updatePositions(result.animationTargets)
+                currentMappers[displayID] = instantMapper
+                print("[tile] instant placement: \(result.animationTargets.count) window(s) on display \(displayID)")
             }
         }
         observer.isSuppressed = false
-        subscribeAllToDestroyed()
+        subscribeAllWindows()
         fullscreenWindowID = nil
         // Refresh fingerprint cache so subsequent auto-tiles can diff accurately
-        let currentWindows = tiler.filterWindows(WindowDiscovery.allWindows())
-        lastTileableFingerprints = Set(currentWindows.map { "\($0.appPID):\(Int($0.position.x)):\(Int($0.position.y)):\(Int($0.size.width)):\(Int($0.size.height))" })
+        lastTileableFingerprints = currentFingerprintsByDisplay()
 
         // Prevent spurious re-tiles from transient windows created during resize.
         // Must outlast animation + AX debounce interval + notification delivery window.
         let cooldown = max(0.5, tiler.config.animationDuration + 0.35)
         recentlyTiled = true
         DispatchQueue.main.asyncAfter(deadline: .now() + cooldown) { [weak self] in
-            self?.recentlyTiled = false
+            guard let self else { return }
+            self.recentlyTiled = false
+            // Catch changes that happened entirely inside the cooldown (e.g. a drag
+            // completed right after a tile) so they still get re-tiled.
+            let fingerprints = self.currentFingerprintsByDisplay()
+            let allKeys = Set(fingerprints.keys).union(self.lastTileableFingerprints.keys)
+            let changed = allKeys.contains { fingerprints[$0] != self.lastTileableFingerprints[$0] }
+            if changed {
+                print("[auto-tile] change caught after cooldown — tiling")
+                self.tileWithSuppression()
+            }
         }
     }
 
-    private func animateWindows(targets: [String: CGPoint], startPositions: [String: CGPoint], steps: Int, duration: TimeInterval) {
+    private func animateWindows(displayID: CGDirectDisplayID, targets: [String: CGPoint], startPositions: [String: CGPoint], steps: Int, duration: TimeInterval) {
         guard !targets.isEmpty else { return }
         let interval = duration / Double(max(steps, 1))
-        print("[animate] sliding \(targets.count) windows — \(steps) steps over \(Int(duration * 1000))ms")
+        print("[animate] sliding \(targets.count) windows on display \(displayID) — \(steps) steps over \(Int(duration * 1000))ms")
 
         for i in 1...steps {
             let t = Double(i) / Double(steps)
@@ -170,7 +207,7 @@ final class Daemon: @unchecked Sendable {
             DispatchQueue.main.asyncAfter(deadline: .now() + interval * Double(i)) { [weak self] in
                 guard let self else { return }
                 for (id, targetPos) in targets {
-                    guard let macWin = self.currentMapper?.window(withID: id) else { continue }
+                    guard let macWin = self.currentMappers[displayID]?.window(withID: id) else { continue }
                     let startPos = startPositions[id] ?? targetPos
                     let x = startPos.x + (targetPos.x - startPos.x) * eased
                     let y = startPos.y + (targetPos.y - startPos.y) * eased
@@ -184,21 +221,25 @@ final class Daemon: @unchecked Sendable {
                     for (id, targetPos) in targets {
                         var pt = targetPos
                         if let axValue = AXValueCreate(.cgPoint, &pt),
-                           let macWin = self.currentMapper?.window(withID: id) {
+                           let macWin = self.currentMappers[displayID]?.window(withID: id) {
                             AXUIElementSetAttributeValue(macWin.windowRef, kAXPositionAttribute as CFString, axValue)
                         }
                     }
-                    if var mapper = self.currentMapper {
+                    if var mapper = self.currentMappers[displayID] {
                         mapper.updatePositions(targets)
-                        self.currentMapper = mapper
+                        self.currentMappers[displayID] = mapper
                     }
+                    // Fingerprints were captured pre-animation; refresh now so the
+                    // settled state matches and no redundant re-tile fires later.
+                    self.lastTileableFingerprints = self.currentFingerprintsByDisplay()
                 }
             }
         }
     }
 
-    private func centerNewFloaters(newlyFloated: Set<String> = []) {
-        guard let mapper = currentMapper else { return }
+    private func centerNewFloaters(displayID: CGDirectDisplayID, newlyFloated: Set<String> = []) {
+        guard let mapper = currentMappers[displayID],
+              let screenRect = ScreenManager.display(byID: displayID)?.rect else { return }
         let configFloaterBundleIDs = Set(tiler.config.floatingAppIDs)
         var newFloaters = mapper.allWindows
             .filter { configFloaterBundleIDs.contains($0.bundleID ?? "") && !centeredFloaterIDs.contains($0.id) }
@@ -212,20 +253,43 @@ final class Daemon: @unchecked Sendable {
         var updatedMapper = mapper
         var staggerIndex = 0
         for win in newFloaters {
-            updatedMapper.centerOnScreen(id: win.id, staggerIndex: staggerIndex)
+            updatedMapper.centerOnScreen(id: win.id, screenRect: screenRect, staggerIndex: staggerIndex)
             centeredFloaterIDs.insert(win.id)
             staggerIndex += 1
         }
-        currentMapper = updatedMapper
+        currentMappers[displayID] = updatedMapper
     }
 
-    // MARK: - Destroyed notification subscription
+    // MARK: - Window notification subscription
 
-    private func subscribeAllToDestroyed() {
-        guard let mapper = currentMapper else { return }
-        for win in mapper.allWindows {
-            observer.subscribeToDestroyed(element: win.windowRef, forPID: win.appPID)
+    /// Subscribe all windows to destroyed notifications; subscribe tiled windows
+    /// to moved/resized so drags trigger a re-tile. Floaters only get destroyed.
+    private func subscribeAllWindows() {
+        for (displayID, mapper) in currentMappers {
+            let tiledIDs = Set(currentWorkspaces[displayID]?.getLayout().map { $0.0.id } ?? [])
+            for win in mapper.allWindows {
+                observer.subscribeToDestroyed(element: win.windowRef, forPID: win.appPID)
+                if tiledIDs.contains(win.id) {
+                    observer.subscribeToWindow(element: win.windowRef, forPID: win.appPID)
+                }
+            }
         }
+    }
+
+    // MARK: - Active display resolution
+
+    /// The display whose BSP tree contains the currently focused window.
+    /// Falls back to the main display when nothing is focused.
+    private func activeDisplayID() -> CGDirectDisplayID? {
+        for (id, mapper) in currentMappers where findFocusedMapperWindow(in: mapper) != nil {
+            return id
+        }
+        return ScreenManager.mainDisplayID
+    }
+
+    private func screenRect(for displayID: CGDirectDisplayID) -> Rect {
+        ScreenManager.display(byID: displayID)?.rect
+            ?? Rect(x: 0, y: 0, width: 1920, height: 1080)
     }
 
     // MARK: - Focus navigation
@@ -243,24 +307,10 @@ final class Daemon: @unchecked Sendable {
         }?.id
     }
 
-    private func tilerScreenRect() -> Rect {
-        guard let screen = NSScreen.main else {
-            return Rect(x: 0, y: 0, width: 1920, height: 1080)
-        }
-        let frame = screen.frame
-        let visible = screen.visibleFrame
-        let topInset = frame.height - (visible.origin.y + visible.height)
-        return Rect(
-            x: Double(visible.origin.x),
-            y: Double(topInset),
-            width: Double(visible.size.width),
-            height: Double(visible.size.height)
-        )
-    }
-
     func focusLeft() {
-        guard let ws = currentWorkspace else { print("[focus] no workspace — tile first"); return }
-        guard let mapper = currentMapper else { print("[focus] no mapper — tile first"); return }
+        guard let displayID = activeDisplayID() else { print("[focus] no displays — tile first"); return }
+        guard let ws = currentWorkspaces[displayID] else { print("[focus] no workspace — tile first"); return }
+        guard let mapper = currentMappers[displayID] else { print("[focus] no mapper — tile first"); return }
         guard ws.focusLeft() else { print("[focus] already at leftmost"); return }
         guard let focusedID = ws.focusedWindowID else { print("[focus] no focused window"); return }
         if mapper.focusWindow(id: focusedID) {
@@ -271,8 +321,9 @@ final class Daemon: @unchecked Sendable {
     }
 
     func focusRight() {
-        guard let ws = currentWorkspace else { print("[focus] no workspace — tile first"); return }
-        guard let mapper = currentMapper else { print("[focus] no mapper — tile first"); return }
+        guard let displayID = activeDisplayID() else { print("[focus] no displays — tile first"); return }
+        guard let ws = currentWorkspaces[displayID] else { print("[focus] no workspace — tile first"); return }
+        guard let mapper = currentMappers[displayID] else { print("[focus] no mapper — tile first"); return }
         guard ws.focusRight() else { print("[focus] already at rightmost"); return }
         guard let focusedID = ws.focusedWindowID else { print("[focus] no focused window"); return }
         if mapper.focusWindow(id: focusedID) {
@@ -283,8 +334,9 @@ final class Daemon: @unchecked Sendable {
     }
 
     func focusUp() {
-        guard let ws = currentWorkspace else { print("[focus] no workspace — tile first"); return }
-        guard let mapper = currentMapper else { print("[focus] no mapper — tile first"); return }
+        guard let displayID = activeDisplayID() else { print("[focus] no displays — tile first"); return }
+        guard let ws = currentWorkspaces[displayID] else { print("[focus] no workspace — tile first"); return }
+        guard let mapper = currentMappers[displayID] else { print("[focus] no mapper — tile first"); return }
         guard ws.focusUp() else { print("[focus] already at topmost"); return }
         guard let focusedID = ws.focusedWindowID else { print("[focus] no focused window"); return }
         if mapper.focusWindow(id: focusedID) {
@@ -295,8 +347,9 @@ final class Daemon: @unchecked Sendable {
     }
 
     func focusDown() {
-        guard let ws = currentWorkspace else { print("[focus] no workspace — tile first"); return }
-        guard let mapper = currentMapper else { print("[focus] no mapper — tile first"); return }
+        guard let displayID = activeDisplayID() else { print("[focus] no displays — tile first"); return }
+        guard let ws = currentWorkspaces[displayID] else { print("[focus] no workspace — tile first"); return }
+        guard let mapper = currentMappers[displayID] else { print("[focus] no mapper — tile first"); return }
         guard ws.focusDown() else { print("[focus] already at bottommost"); return }
         guard let focusedID = ws.focusedWindowID else { print("[focus] no focused window"); return }
         if mapper.focusWindow(id: focusedID) {
@@ -307,8 +360,9 @@ final class Daemon: @unchecked Sendable {
     }
 
     func removeFocused() {
-        guard let ws = currentWorkspace else { print("[remove] no workspace — tile first"); return }
-        guard var mapper = currentMapper else { print("[remove] no mapper — tile first"); return }
+        guard let displayID = activeDisplayID() else { print("[remove] no displays — tile first"); return }
+        guard let ws = currentWorkspaces[displayID] else { print("[remove] no workspace — tile first"); return }
+        guard var mapper = currentMappers[displayID] else { print("[remove] no mapper — tile first"); return }
         guard let focusedID = ws.focusedWindowID else { print("[remove] no focused window"); return }
         print("[remove] removing \(focusedID)")
         observer.isSuppressed = true
@@ -316,19 +370,20 @@ final class Daemon: @unchecked Sendable {
         let layout = ws.getLayout()
         if layout.isEmpty {
             print("[remove] no windows left")
-            currentWorkspace = nil
-            currentMapper = nil
+            currentWorkspaces[displayID] = nil
+            currentMappers[displayID] = nil
         } else {
-            let screenRect = tilerScreenRect()
+            let screenRect = screenRect(for: displayID)
             mapper.applyLayout(layout, screenRect: screenRect)
-            currentMapper = mapper
+            currentMappers[displayID] = mapper
         }
         observer.isSuppressed = false
     }
 
     func toggleFullscreen() {
-        guard let ws = currentWorkspace else { print("[fullscreen] no workspace — tile first"); return }
-        guard var mapper = currentMapper else { print("[fullscreen] no mapper — tile first"); return }
+        guard let displayID = activeDisplayID() else { print("[fullscreen] no displays — tile first"); return }
+        guard let ws = currentWorkspaces[displayID] else { print("[fullscreen] no workspace — tile first"); return }
+        guard var mapper = currentMappers[displayID] else { print("[fullscreen] no mapper — tile first"); return }
 
         // Exit fullscreen
         if let fsID = fullscreenWindowID {
@@ -337,9 +392,9 @@ final class Daemon: @unchecked Sendable {
             if stillExists {
                 print("[fullscreen] exiting — restoring tile position")
                 observer.isSuppressed = true
-                let screenRect = tilerScreenRect()
+                let screenRect = screenRect(for: displayID)
                 mapper.applyLayout(ws.getLayout(), screenRect: screenRect)
-                currentMapper = mapper
+                currentMappers[displayID] = mapper
                 observer.isSuppressed = false
                 return
             }
@@ -350,9 +405,9 @@ final class Daemon: @unchecked Sendable {
         guard let focusedID = findFocusedMapperWindow(in: mapper) else { print("[fullscreen] no focused window"); return }
         guard mapper.window(withID: focusedID) != nil else { print("[fullscreen] focused window not in mapper"); return }
 
-        let sr = tilerScreenRect()
+        let sr = screenRect(for: displayID)
         mapper.setWindowFrame(id: focusedID, position: CGPoint(x: sr.x, y: sr.y), size: CGSize(width: sr.width, height: sr.height))
-        currentMapper = mapper
+        currentMappers[displayID] = mapper
         fullscreenWindowID = focusedID
         print("[fullscreen] ✓ \(focusedID)")
     }

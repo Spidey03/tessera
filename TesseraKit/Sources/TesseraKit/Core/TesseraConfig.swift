@@ -1,3 +1,15 @@
+/// Per-display tiling configuration.
+public struct MultiMonitorConfig: Sendable, Equatable {
+    /// How focus navigation behaves across displays:
+    /// - `"withinDisplay"`: H/J/K/L/I/M operate only on the display holding the focused window (default)
+    /// - `"crossDisplay"`: reserved for future edge-crossing focus
+    public var focusMode: String
+
+    public init(focusMode: String = "withinDisplay") {
+        self.focusMode = focusMode
+    }
+}
+
 public struct TesseraConfig: Sendable {
     public var gapSize: Double
     public var outerGap: Double
@@ -7,6 +19,7 @@ public struct TesseraConfig: Sendable {
     public var animationEnabled: Bool
     public var animationSteps: Int
     public var animationDuration: Double
+    public var multiMonitor: MultiMonitorConfig
 
     public init(
         gapSize: Double = 8,
@@ -16,7 +29,8 @@ public struct TesseraConfig: Sendable {
         floatingAppIDs: [String] = [],
         animationEnabled: Bool = true,
         animationSteps: Int = 8,
-        animationDuration: Double = 0.15
+        animationDuration: Double = 0.15,
+        multiMonitor: MultiMonitorConfig = MultiMonitorConfig()
     ) {
         self.gapSize = gapSize
         self.outerGap = outerGap
@@ -26,5 +40,6 @@ public struct TesseraConfig: Sendable {
         self.animationEnabled = animationEnabled
         self.animationSteps = animationSteps
         self.animationDuration = animationDuration
+        self.multiMonitor = multiMonitor
     }
 }

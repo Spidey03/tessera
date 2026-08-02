@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 import TesseraKit
+import TesseraSystem
 
 // MARK: - Local KeyBinding (duplicated from TesseraDaemon for testability)
 
@@ -371,6 +372,138 @@ func testKeyBindingFullscreenMissingFlags() throws {
     try assert(!binding.matches(event: event))
 }
 
+// MARK: - ScreenManager (pure logic, no live NSScreen dependency)
+
+func makeDisplay(id: UInt32, x: Double, y: Double, w: Double, h: Double, menuBar: Double = 50, mainTop: Double = 1080) -> DisplayInfo {
+    let frame = CGRect(x: x, y: y, width: w, height: h)
+    let visible = CGRect(x: x, y: y + menuBar, width: w, height: h - menuBar)
+    return DisplayInfo(
+        id: id,
+        name: "Display \(id)",
+        frame: frame,
+        visibleFrame: visible,
+        fullRect: ScreenManager.rect(from: frame, visible: frame, mainDisplayTop: mainTop),
+        rect: ScreenManager.rect(from: frame, visible: visible, mainDisplayTop: mainTop)
+    )
+}
+
+func testScreenManagerRectConversionMainDisplay() throws {
+    let rect = ScreenManager.rect(from: CGRect(x: 0, y: 0, width: 1920, height: 1080),
+                                  visible: CGRect(x: 0, y: 50, width: 1920, height: 1030),
+                                  mainDisplayTop: 1080)
+    try assertEqual(rect.x, 0)
+    try assertEqual(rect.y, 0)
+    try assertEqual(rect.width, 1920)
+    try assertEqual(rect.height, 1030)
+}
+
+func testScreenManagerRectConversionDisplayAbove() throws {
+    // Display stacked above the main one: bottom-left frame origin y = 1080
+    let rect = ScreenManager.rect(from: CGRect(x: 0, y: 1080, width: 1920, height: 1080),
+                                  visible: CGRect(x: 0, y: 1113, width: 1920, height: 1047),
+                                  mainDisplayTop: 1080)
+    // y = 1080 - (1113 + 1047) = -1080 → visible top edge in AX space
+    try assertEqual(rect.x, 0)
+    try assertEqual(rect.y, -1080)
+    try assertEqual(rect.width, 1920)
+    try assertEqual(rect.height, 1047)
+}
+
+func testScreenManagerRectConversionDisplayAboveMisalignedHeights() throws {
+    // Regression: main display 1512x982, secondary mounted above at y=982 with a
+    // DIFFERENT height (1080). The AX top of the secondary must be anchored to the
+    // main display's top edge (982), not its own frame height (old bug: -982).
+    let rect = ScreenManager.rect(from: CGRect(x: 0, y: 982, width: 1920, height: 1080),
+                                  visible: CGRect(x: 0, y: 982, width: 1920, height: 1080),
+                                  mainDisplayTop: 982)
+    try assertEqual(rect.x, 0)
+    try assertEqual(rect.y, -1080)
+    try assertEqual(rect.width, 1920)
+    try assertEqual(rect.height, 1080)
+}
+
+func testScreenManagerRectConversionDisplayRight() throws {
+    // Bottom-aligned secondary: its top edge sits 280pt below the main display's top
+    let rect = ScreenManager.rect(from: CGRect(x: 1920, y: 0, width: 1280, height: 800),
+                                  visible: CGRect(x: 1920, y: 50, width: 1280, height: 750),
+                                  mainDisplayTop: 1080)
+    try assertEqual(rect.x, 1920)
+    try assertEqual(rect.y, 280)
+    try assertEqual(rect.width, 1280)
+    try assertEqual(rect.height, 750)
+}
+
+func testDisplayContainingPoint() throws {
+    let displays = [
+        makeDisplay(id: 1, x: 0, y: 0, w: 1920, h: 1080),
+        makeDisplay(id: 2, x: 1920, y: 0, w: 1280, h: 800),
+    ]
+    let onMain = ScreenManager.display(containing: CGPoint(x: 100, y: 100), in: displays)
+    try assertEqual(onMain?.id, 1)
+    // Secondary's AX visible rect starts at y=280 (bottom-aligned, shorter)
+    let onSecondary = ScreenManager.display(containing: CGPoint(x: 2000, y: 500), in: displays)
+    try assertEqual(onSecondary?.id, 2)
+    // Physically between the two displays (above secondary's top edge, past main's right edge)
+    let inGap = ScreenManager.display(containing: CGPoint(x: 2000, y: 100), in: displays)
+    try assertNil(inGap)
+}
+
+func testDisplayContainingWindowCenter() throws {
+    let displays = [
+        makeDisplay(id: 1, x: 0, y: 0, w: 1920, h: 1080),
+        makeDisplay(id: 2, x: 1920, y: 0, w: 1280, h: 800),
+    ]
+    // Window straddling both displays — center (1700+200=1900) on main
+    let straddle = CGRect(x: 1700, y: 100, width: 400, height: 400)
+    let display = ScreenManager.display(containing: straddle, in: displays)
+    try assertEqual(display?.id, 1)
+    // Window fully on secondary
+    let onRight = CGRect(x: 2000, y: 200, width: 400, height: 300)
+    try assertEqual(ScreenManager.display(containing: onRight, in: displays)?.id, 2)
+}
+
+func testDisplayContainingOffScreenReturnsNil() throws {
+    let displays = [makeDisplay(id: 1, x: 0, y: 0, w: 1920, h: 1080)]
+    let offScreen = ScreenManager.display(containing: CGPoint(x: 5000, y: 5000), in: displays)
+    try assertNil(offScreen)
+}
+
+func testDesktopWallpaperDetection() throws {
+    let displays = [
+        makeDisplay(id: 1, x: 0, y: 0, w: 1920, h: 1080),
+        makeDisplay(id: 2, x: 1920, y: 0, w: 1280, h: 800),
+    ]
+    // Main wallpaper at origin
+    try assert(ScreenManager.isDesktopWallpaper(title: "", position: CGPoint(x: 0, y: 0),
+                                                size: CGSize(width: 1920, height: 1080), in: displays))
+    // Secondary wallpaper at its corrected AX origin (280pt below main's top, bottom-aligned)
+    try assert(ScreenManager.isDesktopWallpaper(title: "", position: CGPoint(x: 1920, y: 280),
+                                                size: CGSize(width: 1280, height: 800), in: displays))
+    // A real window with a title is never a wallpaper
+    try assert(!ScreenManager.isDesktopWallpaper(title: "Terminal", position: CGPoint(x: 0, y: 0),
+                                                 size: CGSize(width: 1920, height: 1080), in: displays))
+    // Wrong size is not a wallpaper
+    try assert(!ScreenManager.isDesktopWallpaper(title: "", position: CGPoint(x: 0, y: 0),
+                                                 size: CGSize(width: 100, height: 100), in: displays))
+}
+
+func testDesktopWallpaperSpansMultipleDisplays() throws {
+    // Real-world regression: main 1512x982 (menu bar 33), HP 1920x1080 mounted above.
+    // The Finder desktop window reports a frame spanning BOTH displays
+    // (1920x2062 at -209,-1080) — it must still be recognized as wallpaper.
+    let displays = [
+        makeDisplay(id: 1, x: 0, y: 0, w: 1512, h: 982, menuBar: 33, mainTop: 982),
+        makeDisplay(id: 3, x: -209, y: 982, w: 1920, h: 1080, menuBar: 0, mainTop: 982),
+    ]
+    let spanning = ScreenManager.isDesktopWallpaper(title: "", position: CGPoint(x: -209, y: -1080),
+                                                    size: CGSize(width: 1920, height: 2062), in: displays)
+    try assert(spanning)
+    // A genuine window overlapping the boundary is NOT wallpaper
+    let realWindow = ScreenManager.isDesktopWallpaper(title: "", position: CGPoint(x: -209, y: -500),
+                                                      size: CGSize(width: 955, height: 535), in: displays)
+    try assert(!realWindow)
+}
+
 // MARK: - Runner
 
 let tests: [(String, () throws -> Void)] = [
@@ -411,6 +544,16 @@ let tests: [(String, () throws -> Void)] = [
     ("KeyBinding fullscreen matches", testKeyBindingFullscreenMatches),
     ("KeyBinding fullscreen wrong keyCode", testKeyBindingFullscreenWrongKeyCode),
     ("KeyBinding fullscreen missing flags", testKeyBindingFullscreenMissingFlags),
+    // ScreenManager
+    ("ScreenManager rect conversion main display", testScreenManagerRectConversionMainDisplay),
+    ("ScreenManager rect conversion display above", testScreenManagerRectConversionDisplayAbove),
+    ("ScreenManager rect conversion display above misaligned heights", testScreenManagerRectConversionDisplayAboveMisalignedHeights),
+    ("ScreenManager rect conversion display right", testScreenManagerRectConversionDisplayRight),
+    ("Display containing point", testDisplayContainingPoint),
+    ("Display containing window center", testDisplayContainingWindowCenter),
+    ("Display containing off-screen returns nil", testDisplayContainingOffScreenReturnsNil),
+    ("Desktop wallpaper detection across displays", testDesktopWallpaperDetection),
+    ("Desktop wallpaper spanning multiple displays", testDesktopWallpaperSpansMultipleDisplays),
 ]
 
 var passed = 0

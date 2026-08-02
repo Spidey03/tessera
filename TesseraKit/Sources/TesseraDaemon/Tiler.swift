@@ -2,12 +2,23 @@ import AppKit
 import TesseraKit
 import TesseraSystem
 
+/// Result of tiling one display's windows.
+struct DisplayTileResult {
+    let displayID: CGDirectDisplayID
+    let screenRect: Rect
+    let workspace: Workspace
+    let mapper: WindowMapper
+    let newlyFloated: Set<String>
+    let animationTargets: [String: CGPoint]
+}
+
 struct Tiler {
     let config: TesseraConfig
 
-    /// Returns the workspace + mapper state for subsequent focus/remove operations.
+    /// Tiles every display's windows into its own BSP workspace.
+    /// Returns a per-display result dictionary (empty when no windows).
     @discardableResult
-    func tileAllWindows() -> (workspace: Workspace, mapper: WindowMapper, newlyFloated: Set<String>, animationTargets: [String: CGPoint])? {
+    func tileAllWindows() -> [CGDirectDisplayID: DisplayTileResult] {
         let allWindows = WindowDiscovery.allWindows()
         let windows = filterWindows(allWindows)
 
@@ -20,14 +31,42 @@ struct Tiler {
 
         guard !windows.isEmpty else {
             print("[tiler] no windows to tile — skipping")
-            return nil
+            return [:]
         }
 
-        let screenRect = screenRect()
-        print("[tiler] screen rect: \(screenRect)")
+        let displays = ScreenManager.displays
+        print("[tiler] displays: \(displays.map { "\($0.name)(\($0.id))" }.joined(separator: ", "))")
+
+        // Group windows by containing display (window center decides)
+        var windowsByDisplay: [CGDirectDisplayID: [MacWindow]] = [:]
+        var unassigned: [MacWindow] = []
+        for w in windows {
+            if let display = ScreenManager.display(containing: w.frame, in: displays) {
+                windowsByDisplay[display.id, default: []].append(w)
+            } else {
+                unassigned.append(w)
+            }
+        }
+        // Off-screen / unknown windows fall back to the main display
+        if !unassigned.isEmpty, let fallbackID = ScreenManager.mainDisplayID {
+            windowsByDisplay[fallbackID, default: []].append(contentsOf: unassigned)
+            print("[tiler] \(unassigned.count) window(s) not on any display — assigned to main (\(fallbackID))")
+        }
+
+        let configFloaterBundleIDs = Set(config.floatingAppIDs)
+        var results: [CGDirectDisplayID: DisplayTileResult] = [:]
+        for display in displays {
+            guard let displayWindows = windowsByDisplay[display.id], !displayWindows.isEmpty else { continue }
+            results[display.id] = tileDisplay(display, windows: displayWindows, configFloaterBundleIDs: configFloaterBundleIDs)
+        }
+        return results
+    }
+
+    private func tileDisplay(_ display: DisplayInfo, windows: [MacWindow], configFloaterBundleIDs: Set<String>) -> DisplayTileResult {
+        let screenRect = display.rect
+        print("[tiler] screen \(display.name) rect: \(screenRect) — \(windows.count) windows")
 
         // Separate config-floaters (never enter BSP tree) from tiled candidates
-        let configFloaterBundleIDs = Set(config.floatingAppIDs)
         let floaterIDs = Set(windows.filter { configFloaterBundleIDs.contains($0.bundleID ?? "") }.map(\.id))
         let tiledIDs = Set(windows.map(\.id)).subtracting(floaterIDs)
 
@@ -41,9 +80,9 @@ struct Tiler {
         }
 
         let layout = workspace.getLayout()
-        print("[tiler] layout has \(layout.count) entries:")
+        print("[tiler]   layout has \(layout.count) entries:")
         for (win, rect) in layout {
-            print("[tiler]   \(win.id) → \(rect)")
+            print("[tiler]     \(win.id) → \(rect)")
         }
 
         // Compute layout (resize for overflow detection but don't move windows)
@@ -58,7 +97,7 @@ struct Tiler {
             iteration += 1
             let remaining = tiledIDs.subtracting(floated)
             guard !remaining.isEmpty else {
-                print("[tiler] all remaining windows overflowed — giving up")
+                print("[tiler]   all remaining windows overflowed — giving up")
                 break
             }
             resultWorkspace = Workspace(monitorRect: screenRect, config: config)
@@ -73,12 +112,19 @@ struct Tiler {
         }
 
         let tiledCount = max(0, tiledIDs.count - allFloated.count)
-        print("[tiler] layout applied ✓ (\(tiledCount) tiled, \(allFloated.count) floated)")
-        return (resultWorkspace, mapper, allFloated, finalTargets)
+        print("[tiler]   layout applied ✓ (\(tiledCount) tiled, \(allFloated.count) floated)")
+        return DisplayTileResult(
+            displayID: display.id,
+            screenRect: screenRect,
+            workspace: resultWorkspace,
+            mapper: mapper,
+            newlyFloated: allFloated,
+            animationTargets: finalTargets
+        )
     }
 
     func filterWindows(_ allWindows: [MacWindow]) -> [MacWindow] {
-        let screenFrame = screenCGRect()
+        let displays = ScreenManager.displays
         let excludedSubroles: Set<String> = [
             "AXDialog",
             "AXSheet",
@@ -90,8 +136,10 @@ struct Tiler {
         return allWindows.filter { w in
             guard !w.isMinimized else { return false }
             guard w.role == "AXWindow" else { return false }
-            // Skip desktop wallpaper windows: fullscreen, empty title, at origin
-            if w.title.isEmpty && w.position == .zero && w.size == screenFrame.size { return false }
+            // Skip desktop wallpaper windows on any display: fullscreen, empty title, at display origin
+            if ScreenManager.isDesktopWallpaper(title: w.title, position: w.position, size: w.size, in: displays) {
+                return false
+            }
             // Exclude non-standard window types (dialogs, sheets, floating panels, etc.)
             if let sr = w.subrole, excludedSubroles.contains(sr) {
                 print("[tiler] excluding \(w.appName): \"\(w.title)\" — subrole=\(sr)")
@@ -99,27 +147,5 @@ struct Tiler {
             }
             return true
         }
-    }
-
-    private func screenCGRect() -> CGRect {
-        NSScreen.main?.frame ?? CGRect(x: 0, y: 0, width: 1920, height: 1080)
-    }
-
-    private func screenRect() -> Rect {
-        guard let screen = NSScreen.main else {
-            return Rect(x: 0, y: 0, width: 1920, height: 1080)
-        }
-        let frame = screen.frame
-        let visible = screen.visibleFrame
-        // The visible frame excludes the menu bar and dock.
-        // Convert from NSScreen's bottom-left to top-left coordinates
-        // so the BSP engine matches AX's coordinate system.
-        let topInset = frame.height - (visible.origin.y + visible.height)
-        return Rect(
-            x: Double(visible.origin.x),
-            y: Double(topInset),
-            width: Double(visible.size.width),
-            height: Double(visible.size.height)
-        )
     }
 }

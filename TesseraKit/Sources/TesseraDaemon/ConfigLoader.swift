@@ -9,6 +9,10 @@ struct HotkeyConfig: Codable {
     var flags: [String]
 }
 
+struct MultiMonitorConfigFile: Codable {
+    var focusMode: String?
+}
+
 struct TesseraConfigFile: Codable {
     var gapSize: Double?
     var outerGap: Double?
@@ -17,6 +21,7 @@ struct TesseraConfigFile: Codable {
     var animationEnabled: Bool?
     var animationSteps: Int?
     var animationDuration: Double?
+    var multiMonitor: MultiMonitorConfigFile?
     var hotkeys: [String: HotkeyConfig]?
 }
 
@@ -73,6 +78,9 @@ enum ConfigLoader {
                 "animationEnabled": true,
                 "animationSteps": 8,
                 "animationDuration": 0.15,
+                "multiMonitor": [
+                    "focusMode": "withinDisplay",
+                ],
                 "hotkeys": [
                     "tile": ["keyCode": 36, "flags": ["cmd", "opt"]],
                     "focusLeft": ["keyCode": 4, "flags": ["cmd", "opt"]],
@@ -104,7 +112,10 @@ enum ConfigLoader {
             floatingAppIDs: fc.floatingApps ?? defaults.floatingAppIDs,
             animationEnabled: fc.animationEnabled ?? defaults.animationEnabled,
             animationSteps: fc.animationSteps ?? defaults.animationSteps,
-            animationDuration: fc.animationDuration ?? defaults.animationDuration
+            animationDuration: fc.animationDuration ?? defaults.animationDuration,
+            multiMonitor: MultiMonitorConfig(
+                focusMode: fc.multiMonitor?.focusMode ?? MultiMonitorConfig().focusMode
+            )
         )
     }
 

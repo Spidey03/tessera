@@ -5,10 +5,14 @@ import Foundation
 public final class WindowObserver {
     private var observers: [pid_t: AXObserver] = [:]
     private let debounceInterval: TimeInterval
+    private let dragDebounceInterval: TimeInterval
     private var debounceWorkItem: DispatchWorkItem?
 
     /// Callback fired when a debounced window change notification arrives.
     public var onChange: (() -> Void)?
+
+    /// Callback fired when the display configuration changes (hotplug, resolution, arrangement).
+    public var onScreensChanged: (() -> Void)?
 
     /// When true, incoming notifications are suppressed (used during our own layout)
     public var isSuppressed = false
@@ -17,8 +21,15 @@ public final class WindowObserver {
         kAXWindowCreatedNotification as String,
     ]
 
-    public init(debounce: TimeInterval = 0.05) {
+    private let windowNotificationNames: [String] = [
+        kAXMovedNotification as String,
+        kAXResizedNotification as String,
+        kAXUIElementDestroyedNotification as String,
+    ]
+
+    public init(debounce: TimeInterval = 0.05, dragDebounce: TimeInterval = 0.25) {
         self.debounceInterval = debounce
+        self.dragDebounceInterval = dragDebounce
     }
 
     deinit {
@@ -33,10 +44,14 @@ public final class WindowObserver {
                        name: NSWorkspace.didLaunchApplicationNotification, object: nil)
         nc.addObserver(self, selector: #selector(appTerminated(_:)),
                        name: NSWorkspace.didTerminateApplicationNotification, object: nil)
+
+        NotificationCenter.default.addObserver(self, selector: #selector(screensChanged(_:)),
+                                               name: NSApplication.didChangeScreenParametersNotification, object: nil)
     }
 
     public func stop() {
         NSWorkspace.shared.notificationCenter.removeObserver(self)
+        NotificationCenter.default.removeObserver(self)
 
         for (_, observer) in observers {
             let source = AXObserverGetRunLoopSource(observer)
@@ -62,6 +77,12 @@ public final class WindowObserver {
             let source = AXObserverGetRunLoopSource(observer)
             CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .defaultMode)
         }
+    }
+
+    @objc private func screensChanged(_ note: Notification) {
+        guard !isSuppressed else { return }
+        print("[observer] screen parameters changed")
+        onScreensChanged?()
     }
 
     // MARK: - Registration
@@ -108,11 +129,23 @@ public final class WindowObserver {
     // MARK: - Handling
 
     public func subscribeToDestroyed(element: AXUIElement, forPID pid: pid_t) {
+        subscribe(element: element, forPID: pid, names: [kAXUIElementDestroyedNotification as String])
+    }
+
+    /// Subscribe a window element to move/resize/destroyed notifications so
+    /// dragging or resizing it triggers a re-tile.
+    public func subscribeToWindow(element: AXUIElement, forPID pid: pid_t) {
+        subscribe(element: element, forPID: pid, names: windowNotificationNames)
+    }
+
+    private func subscribe(element: AXUIElement, forPID pid: pid_t, names: [String]) {
         guard let obs = observers[pid] else { return }
         let refcon = Unmanaged.passUnretained(self).toOpaque()
-        let err = AXObserverAddNotification(obs, element, kAXUIElementDestroyedNotification as CFString, refcon)
-        if err != .success && err != .notificationAlreadyRegistered {
-            print("[observer] subscribeToDestroyed error: \(err.rawValue)")
+        for name in names {
+            let err = AXObserverAddNotification(obs, element, name as CFString, refcon)
+            if err != .success && err != .notificationAlreadyRegistered {
+                print("[observer] subscribe error for \(name): \(err.rawValue)")
+            }
         }
     }
 
@@ -121,6 +154,12 @@ public final class WindowObserver {
 
         print("[observer] notification: \(notification)")
 
+        // Drags fire move/resize events continuously — use a longer debounce so
+        // the window settles before re-tiling. Create/destroy stay fast.
+        let name = notification as String
+        let interval: TimeInterval = (name == kAXMovedNotification || name == kAXResizedNotification)
+            ? dragDebounceInterval : debounceInterval
+
         debounceWorkItem?.cancel()
         let workItem = DispatchWorkItem { [weak self] in
             guard let self else { return }
@@ -128,6 +167,6 @@ public final class WindowObserver {
             self.onChange?()
         }
         debounceWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + debounceInterval, execute: workItem)
+        DispatchQueue.main.asyncAfter(deadline: .now() + interval, execute: workItem)
     }
 }
