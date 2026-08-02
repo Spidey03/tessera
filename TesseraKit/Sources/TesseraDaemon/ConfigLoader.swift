@@ -89,6 +89,7 @@ enum ConfigLoader {
                     "focusUp": ["keyCode": 34, "flags": ["cmd", "opt"]],
                     "focusDown": ["keyCode": 46, "flags": ["cmd", "opt"]],
                     "fullscreen": ["keyCode": 3, "flags": ["cmd", "opt"]],
+                    "toggleSplit": ["keyCode": 49, "flags": ["cmd", "opt"]],
                     "quit": ["keyCode": 12, "flags": ["cmd", "opt", "shift"]],
                 ] as [String: [String: Any]],
             ]
@@ -130,6 +131,7 @@ enum ConfigLoader {
             KeyBinding(keyCode: 34, flags: [.maskCommand, .maskAlternate], action: "focusUp"),      // I
             KeyBinding(keyCode: 46, flags: [.maskCommand, .maskAlternate], action: "focusDown"),    // M
             KeyBinding(keyCode: 3, flags: [.maskCommand, .maskAlternate], action: "fullscreen"),
+            KeyBinding(keyCode: 49, flags: [.maskCommand, .maskAlternate], action: "toggleSplit"), // Space
             KeyBinding(keyCode: 12, flags: [.maskCommand, .maskAlternate, .maskShift], action: "quit"),
         ]
     }

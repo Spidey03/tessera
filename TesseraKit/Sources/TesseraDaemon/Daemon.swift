@@ -114,6 +114,7 @@ final class Daemon: @unchecked Sendable {
         print("  ⌘⌥K/J — focus left/right (vim-style)")
         print("  ⌘⌥I/M — focus up/down")
         print("  ⌘⌥F   — toggle fullscreen")
+        print("  ⌘⌥Space — toggle split direction")
         print("Listening for keyDown events...")
 
         CFRunLoopRun()
@@ -380,6 +381,45 @@ final class Daemon: @unchecked Sendable {
         observer.isSuppressed = false
     }
 
+    func toggleSplitDirection() {
+        guard let displayID = activeDisplayID() else { print("[split] no displays — tile first"); return }
+        guard let ws = currentWorkspaces[displayID] else { print("[split] no workspace — tile first"); return }
+        guard var mapper = currentMappers[displayID] else { print("[split] no mapper — tile first"); return }
+
+        observer.isSuppressed = true
+        guard ws.toggleSplitDirection() else {
+            observer.isSuppressed = false
+            print("[split] focused window has no parent split — nothing to toggle")
+            return
+        }
+        let layout = ws.getLayout()
+        let screenRect = screenRect(for: displayID)
+        let startPositions = mapper.allWindows.reduce(into: [:]) { $0[$1.id] = $1.position }
+        let (targets, _) = mapper.computeLayout(layout, screenRect: screenRect)
+        currentMappers[displayID] = mapper
+
+        if tiler.config.animationEnabled && !targets.isEmpty {
+            animateWindows(displayID: displayID, targets: targets, startPositions: startPositions,
+                           steps: tiler.config.animationSteps,
+                           duration: tiler.config.animationDuration)
+        } else {
+            guard var instantMapper = currentMappers[displayID] else { return }
+            for (id, pos) in targets {
+                guard let macWin = instantMapper.window(withID: id) else { continue }
+                var pt = pos
+                if let axValue = AXValueCreate(.cgPoint, &pt) {
+                    AXUIElementSetAttributeValue(macWin.windowRef, kAXPositionAttribute as CFString, axValue)
+                }
+            }
+            instantMapper.updatePositions(targets)
+            currentMappers[displayID] = instantMapper
+            lastTileableFingerprints = currentFingerprintsByDisplay()
+        }
+        observer.isSuppressed = false
+        fullscreenWindowID = nil
+        print("[split] toggled on display \(displayID) — \(targets.count) window(s)")
+    }
+
     func toggleFullscreen() {
         guard let displayID = activeDisplayID() else { print("[fullscreen] no displays — tile first"); return }
         guard let ws = currentWorkspaces[displayID] else { print("[fullscreen] no workspace — tile first"); return }
@@ -528,6 +568,12 @@ private let eventTapCallback: CGEventTapCallBack = { proxy, type, event, userInf
         case "fullscreen":
             CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue) {
                 daemon.toggleFullscreen()
+            }
+            CFRunLoopWakeUp(CFRunLoopGetMain())
+            return nil
+        case "toggleSplit", "toggle-split", "toggleSplitDirection":
+            CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue) {
+                daemon.toggleSplitDirection()
             }
             CFRunLoopWakeUp(CFRunLoopGetMain())
             return nil

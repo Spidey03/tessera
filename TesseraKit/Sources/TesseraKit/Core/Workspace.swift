@@ -97,6 +97,45 @@ public final class Workspace: @unchecked Sendable {
         return setFocusByID(root, windowId: id)
     }
 
+    /// Flip the split orientation of the focused window's parent node
+    /// (vertical ↔ horizontal) and reflow the subtree within the parent's rect.
+    /// Returns false when the focused window has no parent split to toggle.
+    @discardableResult
+    public func toggleSplitDirection() -> Bool {
+        guard let currentRoot = root,
+              let focusedID = focusedWindowID,
+              let (_, parent) = findPathToLeaf(currentRoot, windowId: focusedID),
+              let parentNode = parent else { return false }
+
+        let gap = config.gapSize / 2.0
+        parentNode.splitType = parentNode.splitType == .vertical ? .horizontal : .vertical
+        reflow(parentNode, in: parentNode.rect, gap: gap)
+        print("[bsp] toggle split → \(parentNode.splitType?.description ?? "?") on \(parentNode.rect)")
+        return true
+    }
+
+    private func reflow(_ node: TreeNode?, in rect: Rect, gap: Double) {
+        guard let node else { return }
+        node.rect = rect
+        if node.isLeaf {
+            if var window = node.window {
+                window.rect = rect.inset(by: gap)
+                node.window = window
+            }
+            return
+        }
+        let dir = node.splitType ?? .vertical
+        if dir == .vertical {
+            let split = rect.splitVertical()
+            reflow(node.leftChild, in: split.left, gap: gap)
+            reflow(node.rightChild, in: split.right, gap: gap)
+        } else {
+            let split = rect.splitHorizontal()
+            reflow(node.leftChild, in: split.top, gap: gap)
+            reflow(node.rightChild, in: split.bottom, gap: gap)
+        }
+    }
+
     public func getLayout() -> [(Window, Rect)] {
         var result: [(Window, Rect)] = []
         collectLeaves(root, result: &result)

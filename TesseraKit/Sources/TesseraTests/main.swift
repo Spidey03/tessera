@@ -504,6 +504,77 @@ func testDesktopWallpaperSpansMultipleDisplays() throws {
     try assert(!realWindow)
 }
 
+// MARK: - Split direction toggle
+
+func testToggleSplitVerticalToHorizontal() throws {
+    let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    ws.addWindow(Window(id: "A"))
+    ws.addWindow(Window(id: "B"))
+    ws.focusWindow(id: "B")
+    try assertEqual(ws.toggleSplitDirection(), true)
+    let layout = ws.getLayout()
+    let aRect = layout.first { $0.0.id == "A" }!.1
+    let bRect = layout.first { $0.0.id == "B" }!.1
+    try assertEqual(aRect.x, bRect.x)      // stacked → same left edge
+    try assertLessThan(aRect.y, bRect.y)   // A on top, B below
+    try assertEqual(aRect.width, 1904)     // full usable width
+    try assertEqual(aRect.height, 528)     // half height minus gaps
+}
+
+func testToggleSplitRoundTrip() throws {
+    let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    ws.addWindow(Window(id: "A"))
+    ws.addWindow(Window(id: "B"))
+    ws.focusWindow(id: "B")
+    ws.toggleSplitDirection()
+    ws.toggleSplitDirection()
+    let layout = ws.getLayout()
+    let aRect = layout.first { $0.0.id == "A" }!.1
+    let bRect = layout.first { $0.0.id == "B" }!.1
+    try assertEqual(aRect.y, bRect.y)
+    try assertLessThan(aRect.x, bRect.x)
+    try assertEqual(aRect, Rect(x: 8, y: 8, width: 948, height: 1064))
+    try assertEqual(bRect, Rect(x: 964, y: 8, width: 948, height: 1064))
+}
+
+func testToggleSplitSingleWindowReturnsFalse() throws {
+    let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    ws.addWindow(Window(id: "A"))
+    try assertEqual(ws.toggleSplitDirection(), false)
+    try assertEqual(ws.getLayout().count, 1)
+}
+
+func testToggleSplitNestedOnlyAffectsFocusedSplit() throws {
+    let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    ws.addWindow(Window(id: "A"))
+    ws.addWindow(Window(id: "B"))
+    ws.addWindow(Window(id: "C"))
+    ws.focusWindow(id: "C")
+    try assertEqual(ws.toggleSplitDirection(), true)
+    let layout = ws.getLayout()
+    let aRect = layout.first { $0.0.id == "A" }!.1
+    let bRect = layout.first { $0.0.id == "B" }!.1
+    let cRect = layout.first { $0.0.id == "C" }!.1
+    // A and C are now side-by-side inside the left half
+    try assertEqual(aRect.y, cRect.y)
+    try assertLessThan(aRect.x, cRect.x)
+    // B stays untouched in the right half
+    try assertEqual(bRect, Rect(x: 964, y: 8, width: 948, height: 1064))
+}
+
+func testToggleSplitPreservesGapInset() throws {
+    let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    ws.addWindow(Window(id: "A"))
+    ws.addWindow(Window(id: "B"))
+    ws.focusWindow(id: "B")
+    ws.toggleSplitDirection()
+    for (_, rect) in ws.getLayout() {
+        // outerGap 4 + gapSize/2 4 → 8px from the monitor edge
+        try assertEqual(rect.x, 8)
+        try assertEqual(rect.height, 528)
+    }
+}
+
 // MARK: - Runner
 
 let tests: [(String, () throws -> Void)] = [
@@ -554,6 +625,12 @@ let tests: [(String, () throws -> Void)] = [
     ("Display containing off-screen returns nil", testDisplayContainingOffScreenReturnsNil),
     ("Desktop wallpaper detection across displays", testDesktopWallpaperDetection),
     ("Desktop wallpaper spanning multiple displays", testDesktopWallpaperSpansMultipleDisplays),
+    // Split direction toggle
+    ("Toggle split vertical to horizontal", testToggleSplitVerticalToHorizontal),
+    ("Toggle split round trip", testToggleSplitRoundTrip),
+    ("Toggle split single window returns false", testToggleSplitSingleWindowReturnsFalse),
+    ("Toggle split nested only affects focused split", testToggleSplitNestedOnlyAffectsFocusedSplit),
+    ("Toggle split preserves gap inset", testToggleSplitPreservesGapInset),
 ]
 
 var passed = 0
