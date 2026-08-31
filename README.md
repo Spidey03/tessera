@@ -82,11 +82,33 @@ cd TesseraKit
 swift run TesseraDaemon
 ```
 
-> ⚠️ **Future Requirements**: The Swift daemon will require macOS **Accessibility** and **Input Monitoring** permissions. Grant them at:
+> ⚠️ **Requirements**: The Swift daemon requires macOS **Accessibility** and **Input Monitoring** permissions. Grant them at:
 > ```
 > System Settings → Privacy & Security → Accessibility → Add Terminal
 > System Settings → Privacy & Security → Input Monitoring → Add Terminal
 > ```
+
+**Auto-start on login (LaunchAgent)**
+
+To run Tessera as a login agent that starts automatically (and stays up as a background daemon), use:
+
+```bash
+# Install: build release, write the plist, and load the agent
+./scripts/install_daemon.sh
+
+# Remove: unload the agent, delete the plist and installed binary
+./scripts/uninstall_daemon.sh
+```
+
+This installs the release binary to `~/Library/Application Support/Tessera/TesseraDaemon`, writes a LaunchAgent plist (`com.tessera.daemon`), and loads it with `launchctl` so it starts on every login.
+
+Notes:
+- `KeepAlive` is off so the `⌘⌥⇧Q` quit hotkey isn't overridden by an immediate relaunch. Restart it any time with:
+  ```bash
+  launchctl kickstart -k "gui/$(id -u)/com.tessera.daemon"
+  ```
+- Logs go to `~/Library/Logs/Tessera/daemon.log` (stderr → `daemon.err.log`).
+- If Accessibility/Input Monitoring prompts appear after a reinstall (new binary path), grant them once.
 
 ### Hotkeys
 
