@@ -22,6 +22,7 @@ struct TesseraConfigFile: Codable {
     var animationSteps: Int?
     var animationDuration: Double?
     var multiMonitor: MultiMonitorConfigFile?
+    var appRules: [String: AppTilingRule]?
     var hotkeys: [String: HotkeyConfig]?
 }
 
@@ -74,7 +75,13 @@ enum ConfigLoader {
                 "gapSize": 8.0,
                 "outerGap": 4.0,
                 "newWindowFocus": false,
+                // Legacy key: still supported for backward compatibility (auto-migrated to appRules)
                 "floatingApps": ["com.spotify.client"],
+                // Per-app tiling rules (preferred; supersedes floatingApps for these bundle IDs)
+                "appRules": [
+                    "com.spotify.client": "float",
+                    "com.apple.Safari": "normal",
+                ],
                 "animationEnabled": true,
                 "animationSteps": 8,
                 "animationDuration": 0.15,
@@ -91,7 +98,7 @@ enum ConfigLoader {
                     "fullscreen": ["keyCode": 3, "flags": ["cmd", "opt"]],
                     "toggleSplit": ["keyCode": 49, "flags": ["cmd", "opt"]],
                     "quit": ["keyCode": 12, "flags": ["cmd", "opt", "shift"]],
-                ] as [String: [String: Any]],
+                ],
             ]
             if let data = try? JSONSerialization.data(withJSONObject: example, options: [.prettyPrinted, .withoutEscapingSlashes]),
                let json = String(data: data, encoding: .utf8) {
@@ -105,12 +112,23 @@ enum ConfigLoader {
 
     private static func mergeConfig(_ fileConfig: TesseraConfigFile?) -> TesseraConfig {
         guard let fc = fileConfig else { return TesseraConfig() }
+
+        // Auto-migrate legacy floatingApps entries into appRules as .float rules.
+        var mergedAppRules: [String: AppTilingRule] = fc.appRules ?? [:]
+        for bundleID in fc.floatingApps ?? [] {
+            if mergedAppRules[bundleID] == nil {
+                mergedAppRules[bundleID] = .float
+            }
+        }
+
         let defaults = TesseraConfig()
+
         return TesseraConfig(
             gapSize: fc.gapSize ?? defaults.gapSize,
             outerGap: fc.outerGap ?? defaults.outerGap,
             newWindowFocus: fc.newWindowFocus ?? defaults.newWindowFocus,
             floatingAppIDs: fc.floatingApps ?? defaults.floatingAppIDs,
+            appRules: mergedAppRules,
             animationEnabled: fc.animationEnabled ?? defaults.animationEnabled,
             animationSteps: fc.animationSteps ?? defaults.animationSteps,
             animationDuration: fc.animationDuration ?? defaults.animationDuration,

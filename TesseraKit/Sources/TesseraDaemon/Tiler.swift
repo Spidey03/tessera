@@ -53,25 +53,33 @@ struct Tiler {
             print("[tiler] \(unassigned.count) window(s) not on any display — assigned to main (\(fallbackID))")
         }
 
-        let configFloaterBundleIDs = Set(config.floatingAppIDs)
         var results: [CGDirectDisplayID: DisplayTileResult] = [:]
         for display in displays {
             guard let displayWindows = windowsByDisplay[display.id], !displayWindows.isEmpty else { continue }
-            results[display.id] = tileDisplay(display, windows: displayWindows, configFloaterBundleIDs: configFloaterBundleIDs)
+            results[display.id] = tileDisplay(display, windows: displayWindows)
         }
         return results
     }
 
-    private func tileDisplay(_ display: DisplayInfo, windows: [MacWindow], configFloaterBundleIDs: Set<String>) -> DisplayTileResult {
+    private func tileDisplay(_ display: DisplayInfo, windows: [MacWindow]) -> DisplayTileResult {
         let screenRect = display.rect
         print("[tiler] screen \(display.name) rect: \(screenRect) — \(windows.count) windows")
 
-        // Separate config-floaters (never enter BSP tree) from tiled candidates
-        let floaterIDs = Set(windows.filter { configFloaterBundleIDs.contains($0.bundleID ?? "") }.map(\.id))
-        let tiledIDs = Set(windows.map(\.id)).subtracting(floaterIDs)
+        // Separate ignore, float, and normal apps
+        let appRules = config.appRules
+        let ignoreIDs = Set(windows.filter {
+            guard let bid = $0.bundleID else { return false }
+            return appRules[bid] == .ignore
+        }.map(\.id))
+        let floaterIDs = Set(windows.filter {
+            guard let bid = $0.bundleID else { return false }
+            return appRules[bid] == .float
+        }.map(\.id))
+
+        let tiledIDs = Set(windows.map(\.id)).subtracting(ignoreIDs).subtracting(floaterIDs)
 
         var mapper = WindowMapper(realWindows: windows)
-        print("[tiler] mapped \(mapper.pureWindows.count) pure windows (\(tiledIDs.count) tiled, \(floaterIDs.count) config-floated)")
+        print("[tiler] mapped \(mapper.pureWindows.count) pure windows (\(tiledIDs.count) tiled, \(ignoreIDs.count) ignored, \(floaterIDs.count) floated)")
 
         // Build BSP tree with only tiled windows
         let workspace = Workspace(monitorRect: screenRect, config: config)
@@ -133,18 +141,35 @@ struct Tiler {
             "AXStatusWindow",
             "AXHelpWindow",
         ]
+
+        let appRules = config.appRules
+
         return allWindows.filter { w in
             guard !w.isMinimized else { return false }
             guard w.role == "AXWindow" else { return false }
+
             // Skip desktop wallpaper windows on any display: fullscreen, empty title, at display origin
             if ScreenManager.isDesktopWallpaper(title: w.title, position: w.position, size: w.size, in: displays) {
                 return false
             }
+
             // Exclude non-standard window types (dialogs, sheets, floating panels, etc.)
             if let sr = w.subrole, excludedSubroles.contains(sr) {
                 print("[tiler] excluding \(w.appName): \"\(w.title)\" — subrole=\(sr)")
                 return false
             }
+
+            // Per-app tiling rule: ignore = never consider this window at all
+            if let bid = w.bundleID, case .ignore = appRules[bid] ?? .normal {
+                print("[tiler] excluding \(w.appName): \"\(w.title)\" — appRule=ignore")
+                return false
+            }
+
+            // Per-app tiling rule: float = keep in window list but exclude from BSP
+            if let bid = w.bundleID, case .float = appRules[bid] ?? .normal {
+                print("[tiler] marking \(w.appName): \"\(w.title)\" — appRule=float (will skip BSP)")
+            }
+
             return true
         }
     }
