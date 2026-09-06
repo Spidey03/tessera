@@ -77,10 +77,15 @@ enum ConfigLoader {
                 "newWindowFocus": false,
                 // Legacy key: still supported for backward compatibility (auto-migrated to appRules)
                 "floatingApps": ["com.spotify.client"],
-                // Per-app tiling rules (preferred; supersedes floatingApps for these bundle IDs)
+                // Per-app tiling rules (preferred; supersedes floatingApps for these bundle IDs):
+                //   normal — tiled (default)
+                //   float  — excluded from BSP, keeps its own position/size
+                //   ignore — completely untouched and invisible to the tiler
+                //   sticky — tiled, but keeps its tile slot across re-tiles
                 "appRules": [
                     "com.spotify.client": "float",
                     "com.apple.Safari": "normal",
+                    "com.apple.Notes": "sticky",
                 ],
                 "animationEnabled": true,
                 "animationSteps": 8,

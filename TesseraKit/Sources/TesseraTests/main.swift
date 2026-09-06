@@ -575,6 +575,111 @@ func testToggleSplitPreservesGapInset() throws {
     }
 }
 
+// MARK: - WindowOrdering (slot preservation)
+
+func testWindowOrderingPreservesPreviousOrder() throws {
+    let current = ["A", "B", "C", "D"]
+    let ordered = WindowOrdering.reorder(current, previousKeyOrder: ["C", "A"], matchingKey: { $0 }, sortNew: { $0 < $1 })
+    try assertEqual(ordered, ["C", "A", "B", "D"])
+}
+
+func testWindowOrderingSortsEverythingWhenNoPreviousOrder() throws {
+    let current = ["D", "B", "C", "A"]
+    let ordered = WindowOrdering.reorder(current, previousKeyOrder: [], matchingKey: { $0 }, sortNew: { $0 < $1 })
+    try assertEqual(ordered, ["A", "B", "C", "D"])
+}
+
+func testWindowOrderingDropsRemovedWindowsFromPreviousOrder() throws {
+    let current = ["A", "C", "D"]
+    let ordered = WindowOrdering.reorder(current, previousKeyOrder: ["D", "B", "A"], matchingKey: { $0 }, sortNew: { $0 < $1 })
+    // "D" and "A" survive from the previous order; "B" is gone; "C" is new → tail
+    try assertEqual(ordered, ["D", "A", "C"])
+}
+
+func testWindowOrderingMatchesEachItemOnce() throws {
+    let current = ["X", "X", "Y"]
+    let ordered = WindowOrdering.reorder(current, previousKeyOrder: ["X"], matchingKey: { $0 }, sortNew: { $0 < $1 })
+    // The first "X" keeps its previous rank; the second is a new window → tail
+    try assertEqual(ordered, ["X", "X", "Y"])
+}
+
+// MARK: - Slot preservation (reassignLayoutOrder)
+
+func testRebuildWithSameSetKeepsIdenticalSlots() throws {
+    let ws1 = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    for id in ["A", "B", "C", "D"] { ws1.addWindow(Window(id: id)) }
+    let layout1 = ws1.getLayout()
+
+    // Rebuild with a scrambled insertion order, then restore the previous ranks
+    let ws2 = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    for id in ["D", "C", "B", "A"] { ws2.addWindow(Window(id: id)) }
+    ws2.reassignLayoutOrder(layout1.map { $0.0.id })
+
+    let layout2 = ws2.getLayout()
+    try assertEqual(layout2.map { $0.0.id }, layout1.map { $0.0.id })
+    for ((w1, r1), (w2, r2)) in zip(layout1, layout2) {
+        try assertEqual(w1.id, w2.id)
+        try assertEqual(r1, r2)
+    }
+}
+
+func testNewWindowTakesTailSlot() throws {
+    let ws1 = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    for id in ["A", "B", "C"] { ws1.addWindow(Window(id: id)) }
+    let previousOrder = ws1.getLayout().map { $0.0.id }
+
+    // Rebuild with the same windows plus a new window "D" appended at the tail
+    let ws2 = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    for id in previousOrder + ["D"] { ws2.addWindow(Window(id: id)) }
+    ws2.reassignLayoutOrder(previousOrder + ["D"])
+
+    // Existing windows keep their slots; D lands in the last one
+    try assertEqual(ws2.getLayout().map { $0.0.id }, previousOrder + ["D"])
+}
+
+func testStickyWindowKeepsLeftmostSlotDespiteDiscoveryOrder() throws {
+    let ws1 = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    for id in ["B", "A", "C"] { ws1.addWindow(Window(id: id)) }
+    let previousOrder = ws1.getLayout().map { $0.0.id }
+    try assertEqual(previousOrder.first, "B")
+
+    // Discovery now returns windows scrambled; the previous ranks keep B in slot 0
+    let ws2 = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    for id in ["A", "C", "B"] { ws2.addWindow(Window(id: id)) }
+    ws2.reassignLayoutOrder(previousOrder)
+
+    let result = ws2.getLayout().map { $0.0.id }
+    try assertEqual(result.first, "B")
+    try assertEqual(result, previousOrder)
+}
+
+func testReassignLayoutOrderKeepsFocus() throws {
+    let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    ws.addWindow(Window(id: "A"))
+    ws.addWindow(Window(id: "B"))
+    ws.focusWindow(id: "B")
+    ws.reassignLayoutOrder(["B", "A"])
+    try assertEqual(ws.focusedWindowID, "B")
+    try assertEqual(ws.getLayout().map { $0.0.id }, ["B", "A"])
+}
+
+func testAppTilingRuleDecodesSticky() throws {
+    let decoder = JSONDecoder()
+    let rule = try decoder.decode(AppTilingRule.self, from: Data("\"sticky\"".utf8))
+    try assertEqual(rule, .sticky)
+    try assertEqual(rule.excludesFromLayout, false)
+}
+
+func testAppTilingRuleDecodesFromConfigDict() throws {
+    let decoder = JSONDecoder()
+    let data = Data(#"{"com.spotify.client": "float", "com.apple.Notes": "sticky", "com.apple.Safari": "normal"}"#.utf8)
+    let rules = try decoder.decode([String: AppTilingRule].self, from: data)
+    try assertEqual(rules["com.spotify.client"], .float)
+    try assertEqual(rules["com.apple.Notes"], .sticky)
+    try assertEqual(rules["com.apple.Safari"], .normal)
+    try assertEqual(rules["com.apple.Notes"]?.excludesFromLayout, false)
+}
+
 // MARK: - Runner
 
 let tests: [(String, () throws -> Void)] = [
@@ -631,6 +736,18 @@ let tests: [(String, () throws -> Void)] = [
     ("Toggle split single window returns false", testToggleSplitSingleWindowReturnsFalse),
     ("Toggle split nested only affects focused split", testToggleSplitNestedOnlyAffectsFocusedSplit),
     ("Toggle split preserves gap inset", testToggleSplitPreservesGapInset),
+    // WindowOrdering (slot preservation)
+    ("WindowOrdering preserves previous order", testWindowOrderingPreservesPreviousOrder),
+    ("WindowOrdering sorts all when no previous order", testWindowOrderingSortsEverythingWhenNoPreviousOrder),
+    ("WindowOrdering drops removed windows from previous order", testWindowOrderingDropsRemovedWindowsFromPreviousOrder),
+    ("WindowOrdering matches each item once", testWindowOrderingMatchesEachItemOnce),
+    // Slot preservation
+    ("Rebuild with same set keeps identical slots", testRebuildWithSameSetKeepsIdenticalSlots),
+    ("New window takes tail slot", testNewWindowTakesTailSlot),
+    ("Sticky window keeps leftmost slot despite discovery order", testStickyWindowKeepsLeftmostSlotDespiteDiscoveryOrder),
+    ("Reassign layout order keeps focus", testReassignLayoutOrderKeepsFocus),
+    ("AppTilingRule decodes sticky", testAppTilingRuleDecodesSticky),
+    ("AppTilingRule decodes from config dict", testAppTilingRuleDecodesFromConfigDict),
 ]
 
 var passed = 0

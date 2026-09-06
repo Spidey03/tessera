@@ -16,9 +16,11 @@ struct Tiler {
     let config: TesseraConfig
 
     /// Tiles every display's windows into its own BSP workspace.
+    /// `previousOrderKeys` maps each display to the previous layout's window
+    /// keys (appName|title) in order, so existing windows keep their tile slots.
     /// Returns a per-display result dictionary (empty when no windows).
     @discardableResult
-    func tileAllWindows() -> [CGDirectDisplayID: DisplayTileResult] {
+    func tileAllWindows(previousOrderKeys: [CGDirectDisplayID: [String]] = [:]) -> [CGDirectDisplayID: DisplayTileResult] {
         let allWindows = WindowDiscovery.allWindows()
         let windows = filterWindows(allWindows)
 
@@ -56,7 +58,19 @@ struct Tiler {
         var results: [CGDirectDisplayID: DisplayTileResult] = [:]
         for display in displays {
             guard let displayWindows = windowsByDisplay[display.id], !displayWindows.isEmpty else { continue }
-            results[display.id] = tileDisplay(display, windows: displayWindows)
+            // Preserve previous tile slots: existing windows keep their prior order
+            // (and therefore their leaf), brand-new windows sort to the tail.
+            let orderedWindows = WindowOrdering.reorder(
+                displayWindows,
+                previousKeyOrder: previousOrderKeys[display.id] ?? [],
+                matchingKey: { "\($0.appName)|\($0.title)" },
+                sortNew: { a, b in
+                    if a.position.y != b.position.y { return a.position.y < b.position.y }
+                    if a.position.x != b.position.x { return a.position.x < b.position.x }
+                    return (a.appName, a.title) < (b.appName, b.title)
+                }
+            )
+            results[display.id] = tileDisplay(display, windows: orderedWindows)
         }
         return results
     }
@@ -77,15 +91,18 @@ struct Tiler {
         }.map(\.id))
 
         let tiledIDs = Set(windows.map(\.id)).subtracting(ignoreIDs).subtracting(floaterIDs)
+        // Desired slot order: `windows` already arrive in preserved leaf order.
+        let orderedTiledIDs = windows.filter { tiledIDs.contains($0.id) }.map(\.id)
 
         var mapper = WindowMapper(realWindows: windows)
         print("[tiler] mapped \(mapper.pureWindows.count) pure windows (\(tiledIDs.count) tiled, \(ignoreIDs.count) ignored, \(floaterIDs.count) floated)")
 
         // Build BSP tree with only tiled windows
         let workspace = Workspace(monitorRect: screenRect, config: config)
-        for window in mapper.pureWindows where tiledIDs.contains(window.id) {
-            workspace.addWindow(window)
+        for id in orderedTiledIDs {
+            workspace.addWindow(Window(id: id))
         }
+        workspace.reassignLayoutOrder(orderedTiledIDs)
 
         let layout = workspace.getLayout()
         print("[tiler]   layout has \(layout.count) entries:")
@@ -103,15 +120,16 @@ struct Tiler {
         var iteration = 0
         while !floated.isEmpty && iteration < 3 {
             iteration += 1
-            let remaining = tiledIDs.subtracting(floated)
-            guard !remaining.isEmpty else {
+            let remainingOrdered = orderedTiledIDs.filter { !floated.contains($0) }
+            guard !remainingOrdered.isEmpty else {
                 print("[tiler]   all remaining windows overflowed — giving up")
                 break
             }
             resultWorkspace = Workspace(monitorRect: screenRect, config: config)
-            for id in remaining.sorted() {
+            for id in remainingOrdered {
                 resultWorkspace.addWindow(Window(id: id))
             }
+            resultWorkspace.reassignLayoutOrder(remainingOrdered)
             let newLayout = resultWorkspace.getLayout()
             if newLayout.isEmpty { break }
             (targets, floated) = mapper.computeLayout(newLayout, screenRect: screenRect)
@@ -168,6 +186,11 @@ struct Tiler {
             // Per-app tiling rule: float = keep in window list but exclude from BSP
             if let bid = w.bundleID, case .float = appRules[bid] ?? .normal {
                 print("[tiler] marking \(w.appName): \"\(w.title)\" — appRule=float (will skip BSP)")
+            }
+
+            // Per-app tiling rule: sticky = tiled but slot never re-ranked
+            if let bid = w.bundleID, case .sticky = appRules[bid] ?? .normal {
+                print("[tiler] marking \(w.appName): \"\(w.title)\" — appRule=sticky (slot preserved)")
             }
 
             return true

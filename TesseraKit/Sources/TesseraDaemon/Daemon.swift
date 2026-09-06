@@ -137,7 +137,7 @@ final class Daemon: @unchecked Sendable {
     /// Saves per-display workspace + mapper state for subsequent focus/remove operations.
     func tileWithSuppression() {
         observer.isSuppressed = true
-        let results = tiler.tileAllWindows()
+        let results = tiler.tileAllWindows(previousOrderKeys: previousLayoutOrderKeys())
 
         // Update per-display state and prune displays that disappeared
         let liveIDs = Set(ScreenManager.displays.map(\.id))
@@ -195,6 +195,20 @@ final class Daemon: @unchecked Sendable {
                 self.tileWithSuppression()
             }
         }
+    }
+
+    /// Fingerprint of each display's current layout order: for every tiled
+    /// window in layout order, its `appName|title` key resolved through the
+    /// last mapper. Used to preserve tile slots across re-tiles.
+    private func previousLayoutOrderKeys() -> [CGDirectDisplayID: [String]] {
+        var keys: [CGDirectDisplayID: [String]] = [:]
+        for (displayID, workspace) in currentWorkspaces {
+            guard let mapper = currentMappers[displayID] else { continue }
+            keys[displayID] = workspace.getLayout().compactMap { window, _ in
+                mapper.window(withID: window.id).map { "\($0.appName)|\($0.title)" }
+            }
+        }
+        return keys
     }
 
     private func animateWindows(displayID: CGDirectDisplayID, targets: [String: CGPoint], startPositions: [String: CGPoint], steps: Int, duration: TimeInterval) {

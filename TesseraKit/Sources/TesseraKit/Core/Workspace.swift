@@ -142,6 +142,26 @@ public final class Workspace: @unchecked Sendable {
         return result
     }
 
+    /// Reassigns leaf windows in in-order traversal to `orderedIDs`, preserving
+    /// each leaf's geometry (its tile slot). This is what keeps windows in their
+    /// slot across re-tiles: leaf geometry is order-invariant for a given window
+    /// set, so assigning by rank pins each window to the same region.
+    public func reassignLayoutOrder(_ orderedIDs: [String]) {
+        guard !orderedIDs.isEmpty, root != nil else { return }
+        let previousFocusedID = focusedWindowID
+        var leaves: [TreeNode] = []
+        collectLeafNodes(root, into: &leaves)
+        let gap = config.gapSize / 2.0
+        for (index, node) in leaves.enumerated() where index < orderedIDs.count {
+            node.window = Window(id: orderedIDs[index], rect: node.rect.inset(by: gap))
+        }
+        // Focus lives on the leaf, not the window — restore it by id after renaming.
+        if let previousFocusedID, orderedIDs.contains(previousFocusedID) {
+            clearFocus(root)
+            _ = setFocusByID(root, windowId: previousFocusedID)
+        }
+    }
+
     // MARK: - Cycle navigation
 
     @discardableResult
@@ -374,5 +394,15 @@ public final class Workspace: @unchecked Sendable {
         }
         collectLeaves(node.leftChild, result: &result)
         collectLeaves(node.rightChild, result: &result)
+    }
+
+    private func collectLeafNodes(_ node: TreeNode?, into result: inout [TreeNode]) {
+        guard let node else { return }
+        if node.isLeaf {
+            result.append(node)
+            return
+        }
+        collectLeafNodes(node.leftChild, into: &result)
+        collectLeafNodes(node.rightChild, into: &result)
     }
 }
