@@ -171,7 +171,7 @@ tessera/
 │       ├── TesseraKit/Core/    # Pure Swift BSP engine
 │       ├── TesseraSystem/      # macOS AX layer
 │       ├── TesseraDaemon/      # Orchestrator + event loop
-│       ├── TesseraTests/       # 58 Swift tests
+│       ├── TesseraTests/       # 67 Swift tests
 │       └── WindowDiscover/     # AX enumeration CLI
 └── README.md
 ```
@@ -200,7 +200,7 @@ tessera/
 - [x] Split direction toggle (`⌘⌥Space`)
 - [x] Per-app tiling rules (float, ignore, sticky, normal) — sticky keeps its tile slot across re-tiles
 - [x] launchd agent integration (`scripts/install_daemon.sh`)
-- [ ] Window role/subrole filtering refinements
+- [x] Window role/subrole filtering refinements (config-overridable `excludedSubroles`)
 
 **Phase 4** — Polish, packaging, community
 - [ ] Homebrew formula

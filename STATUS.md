@@ -26,12 +26,12 @@
 - **`floatingApps` config** (`floatingAppIDs: [String]`): floating apps stay out of the BSP tree and are screen-centered; legacy key auto-migrated into `appRules` as `.float`
 - **Per-app tiling rules** (`appRules` config, `AppTilingRule`): `normal` (tiled), `float` (out of BSP, keeps position), `ignore` (completely untouched/invisible to tiler), `sticky` (tiled but keeps its tile slot across re-tiles via order-preserving rebuild)
 - **Auto-float**: windows whose actual size overflows their tile by >50px are automatically screen-centered (catches minimum-size windows); floated windows removed from BSP and remaining windows re-tiled (cascade, ≤3 iterations)
-- **AX role/subrole filtering**: `Tiler.filterWindows` keeps only `AXWindow` role and excludes non-standard subroles (dialog, sheet, floating, status, help)
+- **AX role/subrole filtering**: `Tiler.filterWindows` keeps only `AXWindow` role and excludes non-standard subroles (dialog, sheet, floating, status, help, popover); the excluded set is config-overridable via `excludedSubroles` in `config.json`; zero-size windows are skipped
 - **Animations**: easeOutQuad slide animation with configurable steps/duration; skip no-op auto-tiles via tileable-window fingerprints
 - **Fullscreen toggle** (`⌘⌥F`): resizes focused window to fill its display; exiting restores its tile position
 
 ### Testing
-- 58 Swift tests (TesseraTests): BSP tree ops, spatial focus, split toggle, keybinding matching, ScreenManager rect/wallpaper logic, slot-preserving order
+- 67 Swift tests (TesseraTests): BSP tree ops, spatial focus, split toggle, keybinding matching, ScreenManager rect/wallpaper logic, slot-preserving order, subrole filtering
 - 27 Python prototype tests (`tests/test_workspace.py`)
 
 ## What's Left
@@ -41,7 +41,8 @@
 - [x] Split direction toggle (`⌘⌥Space`)
 - [x] Per-app tiling rules (normal, ignore, float, sticky)
 - [x] `sticky` app rule (window keeps its tile slot across re-tiles)
-- [ ] launchd agent integration (auto-start on login)
+- [x] launchd agent integration (auto-start on login)
+- [x] Window role/subrole filtering refinements (config-overridable `excludedSubroles`)
 
 ### Phase 4 — Polish & packaging
 - [ ] Homebrew formula

@@ -151,29 +151,24 @@ struct Tiler {
 
     func filterWindows(_ allWindows: [MacWindow]) -> [MacWindow] {
         let displays = ScreenManager.displays
-        let excludedSubroles: Set<String> = [
-            "AXDialog",
-            "AXSheet",
-            "AXFloatingWindow",
-            "AXSystemFloatingWindow",
-            "AXStatusWindow",
-            "AXHelpWindow",
-        ]
-
+        let excludedSubroles = Set(config.excludedSubroles)
         let appRules = config.appRules
 
         return allWindows.filter { w in
             guard !w.isMinimized else { return false }
-            guard w.role == "AXWindow" else { return false }
 
-            // Skip desktop wallpaper windows on any display: fullscreen, empty title, at display origin
-            if ScreenManager.isDesktopWallpaper(title: w.title, position: w.position, size: w.size, in: displays) {
+            // Role/subrole/size classification (standard AXWindow, non-excluded subrole, non-zero size)
+            guard WindowFilter.isTileable(role: w.role, subrole: w.subrole, size: w.size, excludedSubroles: excludedSubroles) else {
+                if let sr = w.subrole, WindowFilter.isExcludedSubrole(sr, excluded: excludedSubroles) {
+                    print("[tiler] excluding \(w.appName): \"\(w.title)\" — subrole=\(sr)")
+                } else if w.size.width <= 0 || w.size.height <= 0 {
+                    print("[tiler] excluding \(w.appName): \"\(w.title)\" — zero-size window")
+                }
                 return false
             }
 
-            // Exclude non-standard window types (dialogs, sheets, floating panels, etc.)
-            if let sr = w.subrole, excludedSubroles.contains(sr) {
-                print("[tiler] excluding \(w.appName): \"\(w.title)\" — subrole=\(sr)")
+            // Skip desktop wallpaper windows on any display: fullscreen, empty title, at display origin
+            if ScreenManager.isDesktopWallpaper(title: w.title, position: w.position, size: w.size, in: displays) {
                 return false
             }
 

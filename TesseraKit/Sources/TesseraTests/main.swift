@@ -680,6 +680,100 @@ func testAppTilingRuleDecodesFromConfigDict() throws {
     try assertEqual(rules["com.apple.Notes"]?.excludesFromLayout, false)
 }
 
+// MARK: - WindowFilter (role/subrole classification)
+
+func testWindowFilterStandardWindowPasses() throws {
+    let result = WindowFilter.isTileable(
+        role: "AXWindow",
+        subrole: "AXStandardWindow",
+        size: CGSize(width: 800, height: 600),
+        excludedSubroles: AXSubrole.excludedDefaults
+    )
+    try assertEqual(result, true)
+}
+
+func testWindowFilterRejectsNonWindowRole() throws {
+    let result = WindowFilter.isTileable(
+        role: "AXMenu",
+        subrole: nil,
+        size: CGSize(width: 800, height: 600),
+        excludedSubroles: AXSubrole.excludedDefaults
+    )
+    try assertEqual(result, false)
+}
+
+func testWindowFilterRejectsNilRole() throws {
+    let result = WindowFilter.isTileable(
+        role: nil,
+        subrole: "AXStandardWindow",
+        size: CGSize(width: 800, height: 600),
+        excludedSubroles: AXSubrole.excludedDefaults
+    )
+    try assertEqual(result, false)
+}
+
+func testWindowFilterNilSubroleAccepted() throws {
+    let result = WindowFilter.isTileable(
+        role: "AXWindow",
+        subrole: nil,
+        size: CGSize(width: 800, height: 600),
+        excludedSubroles: AXSubrole.excludedDefaults
+    )
+    try assertEqual(result, true)
+}
+
+func testWindowFilterRejectsEachDefaultExcludedSubrole() throws {
+    for subrole in AXSubrole.excludedDefaults {
+        let result = WindowFilter.isTileable(
+            role: "AXWindow",
+            subrole: subrole,
+            size: CGSize(width: 800, height: 600),
+            excludedSubroles: AXSubrole.excludedDefaults
+        )
+        try assert(!result, "expected \(subrole) to be excluded")
+    }
+}
+
+func testWindowFilterConfigOverrideReplacesDefaults() throws {
+    let overrides: Set<String> = ["AXPopover"]
+    try assertEqual(
+        WindowFilter.isTileable(role: "AXWindow", subrole: "AXDialog", size: CGSize(width: 800, height: 600), excludedSubroles: overrides),
+        true
+    )
+    try assertEqual(
+        WindowFilter.isTileable(role: "AXWindow", subrole: "AXPopover", size: CGSize(width: 800, height: 600), excludedSubroles: overrides),
+        false
+    )
+}
+
+func testWindowFilterEmptyOverrideTilesEverythingStandard() throws {
+    let result = WindowFilter.isTileable(
+        role: "AXWindow",
+        subrole: "AXDialog",
+        size: CGSize(width: 800, height: 600),
+        excludedSubroles: []
+    )
+    try assertEqual(result, true)
+}
+
+func testWindowFilterRejectsZeroSize() throws {
+    let zeroWidth = WindowFilter.isTileable(
+        role: "AXWindow", subrole: "AXStandardWindow", size: CGSize(width: 0, height: 600),
+        excludedSubroles: AXSubrole.excludedDefaults
+    )
+    let zeroHeight = WindowFilter.isTileable(
+        role: "AXWindow", subrole: "AXStandardWindow", size: CGSize(width: 800, height: 0),
+        excludedSubroles: AXSubrole.excludedDefaults
+    )
+    try assertEqual(zeroWidth, false)
+    try assertEqual(zeroHeight, false)
+}
+
+func testTesseraConfigDefaultExcludedSubroles() throws {
+    let config = TesseraConfig()
+    try assertEqual(config.excludedSubroles, Array(AXSubrole.excludedDefaults).sorted())
+}
+
 // MARK: - Runner
 
 let tests: [(String, () throws -> Void)] = [
@@ -748,6 +842,16 @@ let tests: [(String, () throws -> Void)] = [
     ("Reassign layout order keeps focus", testReassignLayoutOrderKeepsFocus),
     ("AppTilingRule decodes sticky", testAppTilingRuleDecodesSticky),
     ("AppTilingRule decodes from config dict", testAppTilingRuleDecodesFromConfigDict),
+    // WindowFilter (role/subrole classification)
+    ("WindowFilter standard window passes", testWindowFilterStandardWindowPasses),
+    ("WindowFilter rejects non-window role", testWindowFilterRejectsNonWindowRole),
+    ("WindowFilter rejects nil role", testWindowFilterRejectsNilRole),
+    ("WindowFilter nil subrole accepted", testWindowFilterNilSubroleAccepted),
+    ("WindowFilter rejects each default excluded subrole", testWindowFilterRejectsEachDefaultExcludedSubrole),
+    ("WindowFilter config override replaces defaults", testWindowFilterConfigOverrideReplacesDefaults),
+    ("WindowFilter empty override tiles everything standard", testWindowFilterEmptyOverrideTilesEverythingStandard),
+    ("WindowFilter rejects zero size", testWindowFilterRejectsZeroSize),
+    ("TesseraConfig default excludedSubroles", testTesseraConfigDefaultExcludedSubroles),
 ]
 
 var passed = 0

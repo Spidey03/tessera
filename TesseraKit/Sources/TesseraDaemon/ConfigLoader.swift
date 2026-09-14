@@ -23,6 +23,7 @@ struct TesseraConfigFile: Codable {
     var animationDuration: Double?
     var multiMonitor: MultiMonitorConfigFile?
     var appRules: [String: AppTilingRule]?
+    var excludedSubroles: [String]?
     var hotkeys: [String: HotkeyConfig]?
 }
 
@@ -87,6 +88,14 @@ enum ConfigLoader {
                     "com.apple.Safari": "normal",
                     "com.apple.Notes": "sticky",
                 ],
+                // Window subroles never tiled. If present, this REPLACES the built-in set.
+                "excludedSubroles": [
+                    "AXDialog", "AXSystemDialog",
+                    "AXSheet", "AXSystemSheet",
+                    "AXFloatingWindow", "AXSystemFloatingWindow",
+                    "AXStatusWindow", "AXSystemStatusWindow",
+                    "AXHelpWindow", "AXPopover",
+                ],
                 "animationEnabled": true,
                 "animationSteps": 8,
                 "animationDuration": 0.15,
@@ -134,6 +143,7 @@ enum ConfigLoader {
             newWindowFocus: fc.newWindowFocus ?? defaults.newWindowFocus,
             floatingAppIDs: fc.floatingApps ?? defaults.floatingAppIDs,
             appRules: mergedAppRules,
+            excludedSubroles: fc.excludedSubroles ?? Array(AXSubrole.excludedDefaults).sorted(),
             animationEnabled: fc.animationEnabled ?? defaults.animationEnabled,
             animationSteps: fc.animationSteps ?? defaults.animationSteps,
             animationDuration: fc.animationDuration ?? defaults.animationDuration,

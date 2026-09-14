@@ -27,6 +27,9 @@ public struct TesseraConfig: Sendable, Equatable {
     public var floatingAppIDs: [String]
     /// Per-app tiling rules: app bundle ID → how it's tiled.
     public var appRules: [String: AppTilingRule]
+    /// Window subroles that are never tiled. Defaults to `AXSubrole.excludedDefaults`; a
+    /// config-provided value replaces the built-in set entirely.
+    public var excludedSubroles: [String]
     public var animationEnabled: Bool
     public var animationSteps: Int
     public var animationDuration: Double
@@ -39,6 +42,7 @@ public struct TesseraConfig: Sendable, Equatable {
         newWindowFocus: Bool = false,
         floatingAppIDs: [String] = [],
         appRules: [String: AppTilingRule] = [:],
+        excludedSubroles: [String] = Array(AXSubrole.excludedDefaults).sorted(),
         animationEnabled: Bool = true,
         animationSteps: Int = 8,
         animationDuration: Double = 0.15,
@@ -50,6 +54,7 @@ public struct TesseraConfig: Sendable, Equatable {
         self.newWindowFocus = newWindowFocus
         self.floatingAppIDs = floatingAppIDs
         self.appRules = appRules
+        self.excludedSubroles = excludedSubroles
         self.animationEnabled = animationEnabled
         self.animationSteps = animationSteps
         self.animationDuration = animationDuration
@@ -63,6 +68,7 @@ public struct TesseraConfig: Sendable, Equatable {
             lhs.newWindowFocus == rhs.newWindowFocus &&
             lhs.floatingAppIDs == rhs.floatingAppIDs &&
             lhs.appRules == rhs.appRules &&
+            lhs.excludedSubroles == rhs.excludedSubroles &&
             lhs.animationEnabled == rhs.animationEnabled &&
             lhs.animationSteps == rhs.animationSteps &&
             lhs.animationDuration == rhs.animationDuration &&
