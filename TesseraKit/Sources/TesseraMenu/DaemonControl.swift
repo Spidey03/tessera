@@ -74,6 +74,9 @@ final class DaemonControl: NSObject, @unchecked Sendable {
         return FileManager.default.fileExists(atPath: agent.path)
     }
 
+    var configFileURL: URL { configURL }
+    var logDirectoryURL: URL { logsURL }
+
     // MARK: - Commands
 
     func send(_ action: String) {

@@ -112,7 +112,7 @@ Notes:
 
 **Menu bar companion (optional)**
 
-A menu bar status item that shows whether the daemon is running and can drive it without the terminal: tile now, reload config, open the config file / log folder, start/stop the daemon, and toggle start-at-login.
+A menu bar status item that shows whether the daemon is running and can drive it without the terminal: tile now, reload config, open the config file / log folder, start/stop the daemon, and toggle start-at-login. `Settings…` (`⌘,`) edits the common `config.json` keys (gaps, animation, focus, per-app tiling rules) and live-reloads the running daemon — keys the UI doesn't edit (hotkeys, `excludedSubroles`, `multiMonitor`) are preserved on save.
 
 ```bash
 # Install: build release, write the plist, and load the agent
@@ -257,7 +257,7 @@ tessera/
 **Phase 4** — Polish, packaging, community
 - [x] Homebrew formula (`Formula/tessera.rb`, tag-based install)
 - [x] Menu bar app (`TesseraMenu`, `scripts/install_menu.sh`)
-- [ ] Configuration UI (optional)
+- [x] Configuration UI (in-app settings window; saves `config.json` + live reload)
 
 ---
 

@@ -6,12 +6,12 @@ import AppKit
 final class StatusItemController: NSObject, NSMenuDelegate {
     private let control: DaemonControl
     let statusItem: NSStatusItem
+    private var settingsController: SettingsWindowController?
 
     // Dynamic menu items refreshed in refresh()
     private let startStopItem = NSMenuItem(title: "", action: #selector(toggleStartStop), keyEquivalent: "")
     private let tileItem = NSMenuItem(title: "Tile Windows Now", action: #selector(tileNow), keyEquivalent: "")
     private let reloadItem = NSMenuItem(title: "Reload Config", action: #selector(reloadConfig), keyEquivalent: "")
-    private let stopItem = NSMenuItem(title: "Stop Daemon", action: #selector(stop), keyEquivalent: "")
     private let startAtLoginItem = NSMenuItem(title: "Start at Login", action: #selector(toggleStartAtLogin), keyEquivalent: "")
 
     init(control: DaemonControl) {
@@ -41,6 +41,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.addItem(startStopItem)
         menu.addItem(.separator())
 
+        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.keyEquivalentModifierMask = [.command]
+        settingsItem.target = self
+        menu.addItem(settingsItem)
         let openConfigItem = NSMenuItem(title: "Open Config File…", action: #selector(openConfig), keyEquivalent: "")
         openConfigItem.target = self
         menu.addItem(openConfigItem)
@@ -94,10 +98,6 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         control.send("reload")
     }
 
-    @objc private func stop() {
-        control.stopDaemon()
-    }
-
     @objc private func toggleStartStop() {
         if control.isRunning {
             control.stopDaemon()
@@ -108,6 +108,18 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     @objc private func openConfig() {
         control.openConfig()
+    }
+
+    @objc private func openSettings() {
+        showSettingsWindow()
+    }
+
+    func showSettingsWindow() {
+        if settingsController == nil {
+            let settings = ConfigSettings(configURL: control.configFileURL)
+            settingsController = SettingsWindowController(settings: settings, daemonControl: control)
+        }
+        settingsController?.showSettings()
     }
 
     @objc private func openLogs() {

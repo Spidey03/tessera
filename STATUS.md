@@ -34,6 +34,7 @@
 - **DistributedNotificationCenter IPC**: daemon listens on `TesseraDaemonCommand` (tile, focus*, remove, fullscreen, toggleSplit, reload, quit); posts `TesseraDaemonDidStart`/`DidQuit` and writes a PID file so the menu app detects liveness even if it launched after the daemon
 - **Centralized dispatch**: hotkeys and IPC commands both funnel through `Daemon.handleAction(_:)`; `Daemon.reloadConfig()` swaps tiler/config/bindings live then re-tiles
 - **NSStatusItem app** (`TesseraMenu`): SF-Symbol tile icon, green (running) / gray (stopped) dot, "Start at Login" toggle managing a `com.tessera.menu` LaunchAgent; start/stop daemon, tile now, reload config, open config file / logs folder
+- **Settings window** (`⌘,` or menu): edits `config.json` gaps, animation steps/duration, new-window-focus and per-app tiling rules; merges into the existing file (hotkeys, `excludedSubroles`, `multiMonitor` are preserved) and live-reloads the daemon over IPC
 - **Graceful shutdown**: SIGTERM (launchctl stop) handler posts `DidQuit` and removes the PID file
 
 ### Testing
@@ -53,4 +54,4 @@
 ### Phase 4 — Polish & packaging
 - [x] Homebrew formula (tag-based, MIT, verified via local `brew install --build-from-source`)
 - [x] Menu bar app (`TesseraMenu` — status dot, tile/reload/start-stop, start-at-login)
-- [ ] Configuration UI (optional)
+- [x] Configuration UI (in-app settings: gaps, animation, focus, per-app rules; saves `config.json` preserving unedited keys and live-reloads via IPC)

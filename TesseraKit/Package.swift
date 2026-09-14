@@ -16,6 +16,6 @@ let package = Package(
         .executableTarget(name: "TesseraTests", dependencies: ["TesseraKit", "TesseraSystem"]),
         .executableTarget(name: "WindowDiscover", dependencies: ["TesseraSystem"]),
         .executableTarget(name: "TesseraDaemon", dependencies: ["TesseraKit", "TesseraSystem"]),
-        .executableTarget(name: "TesseraMenu", dependencies: []),
+        .executableTarget(name: "TesseraMenu", dependencies: ["TesseraKit"]),
     ]
 )

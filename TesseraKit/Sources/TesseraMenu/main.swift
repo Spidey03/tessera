@@ -19,8 +19,9 @@ if CommandLine.arguments.contains("--help") {
     Menu bar companion for the Tessera tiling daemon.
 
     Options:
-      --version   Print the version and exit.
-      --help      Show this help and exit.
+      --version        Print the version and exit.
+      --help           Show this help and exit.
+      --show-settings  Open the settings window immediately on launch.
     """)
     exit(0)
 }
@@ -29,6 +30,6 @@ if CommandLine.arguments.contains("--help") {
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
 
-let delegate = AppDelegate()
+let delegate = AppDelegate(showSettingsOnLaunch: CommandLine.arguments.contains("--show-settings"))
 app.delegate = delegate
 app.run()
