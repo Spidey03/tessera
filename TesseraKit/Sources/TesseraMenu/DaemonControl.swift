@@ -12,6 +12,15 @@ final class DaemonControl: NSObject, @unchecked Sendable {
     private let logsURL: URL
     private let menuAgentPlist: URL
 
+    /// Retained observer tokens (DistributedNotificationCenter requires the
+    /// returned token to be kept alive or the observation is silently dropped).
+    private var startObserver: NSObjectProtocol?
+    private var quitObserver: NSObjectProtocol?
+
+    /// Periodically re-check the PID file so the dot stays accurate between
+    /// menu opens / notification delivery.
+    private var pollTimer: Timer?
+
     /// Called whenever running state or start-at-login state may have changed.
     var onStatusChange: (() -> Void)?
 
@@ -25,10 +34,13 @@ final class DaemonControl: NSObject, @unchecked Sendable {
         super.init()
 
         let nc = DistributedNotificationCenter.default()
-        nc.addObserver(forName: Self.daemonDidStart, object: nil, queue: .main) { [weak self] _ in
+        startObserver = nc.addObserver(forName: Self.daemonDidStart, object: nil, queue: .main) { [weak self] _ in
             self?.onStatusChange?()
         }
-        nc.addObserver(forName: Self.daemonDidQuit, object: nil, queue: .main) { [weak self] _ in
+        quitObserver = nc.addObserver(forName: Self.daemonDidQuit, object: nil, queue: .main) { [weak self] _ in
+            self?.onStatusChange?()
+        }
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             self?.onStatusChange?()
         }
     }

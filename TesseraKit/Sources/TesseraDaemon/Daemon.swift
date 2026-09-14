@@ -57,30 +57,21 @@ final class Daemon: @unchecked Sendable {
         print("AX trusted: \(AXIsProcessTrusted())")
         print()
 
-        guard checkPermissions() else {
-            print("Fix permissions and re-run.")
-            exit(1)
-        }
+        checkPermissions()
 
-        guard let tap = createEventTap() else {
-            print("Failed to create event tap. Check Input Monitoring permissions.")
-            exit(1)
-        }
-        print("Event tap created successfully.")
-
-        if CFMachPortIsValid(tap) {
-            print("Event tap is valid.")
+        if let tap = createEventTap(), CFMachPortIsValid(tap) {
+            print("Event tap created successfully.")
+            let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+            CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .defaultMode)
+            print("Run loop source added.")
         } else {
-            print("Event tap is NOT valid — will not receive events.")
-            exit(1)
+            print("⚠️  Event tap unavailable — running WITHOUT hotkeys (IPC only).")
+            print("    Grant Input Monitoring to enable hotkeys; grant Accessibility to tile windows.")
+            print("    Grant in System Settings → Privacy & Security if the launchd-spawned daemon lacks them.")
         }
 
         installSignalHandler()
         startIPCLifecycle()
-
-        let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .defaultMode)
-        print("Run loop source added.")
 
         // Set up the auto-tile callback with suppression
         observer.onChange = { [weak self] in
@@ -578,6 +569,7 @@ final class Daemon: @unchecked Sendable {
         if !AXIsProcessTrusted() {
             print("⚠️  Accessibility permissions required.")
             print("   Grant access: System Settings → Privacy & Security → Accessibility")
+            print("   Add 'TesseraDaemon', or your Terminal, and enable the checkbox.")
             print()
             ok = false
         }
@@ -601,7 +593,7 @@ final class Daemon: @unchecked Sendable {
         } else {
             print("⚠️  Input Monitoring permissions required.")
             print("   Grant access: System Settings → Privacy & Security → Input Monitoring")
-            print("   Add 'Terminal' (or your IDE) and make sure the checkbox is checked.")
+            print("   Add 'TesseraDaemon', or your Terminal, and enable the checkbox.")
             print()
             ok = false
         }
