@@ -45,6 +45,6 @@
 - [x] Window role/subrole filtering refinements (config-overridable `excludedSubroles`)
 
 ### Phase 4 — Polish & packaging
-- [ ] Homebrew formula
+- [x] Homebrew formula (tag-based, MIT, verified via local `brew install --build-from-source`)
 - [ ] Dock icon / menu bar app
 - [ ] Configuration UI (optional)

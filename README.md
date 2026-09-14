@@ -1,10 +1,10 @@
 # Tessera
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
-![Python 3.12+](https://img.shields.io/badge/python-3.12+-3776AB?logo=python)
+![Python 3.9+](https://img.shields.io/badge/python-3.9+-3776AB?logo=python)
 ![Swift 6.0+](https://img.shields.io/badge/swift-6.0+-F05138?logo=swift)
 ![macOS 14.0+](https://img.shields.io/badge/macOS-14.0+-000000?logo=apple)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/anomalyco/tessera/pulls)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/Spidey03/tessera/pulls)
 
 **Tessera** is a lightning-fast, animation-free tiling window manager for macOS powered by a Binary Space Partitioning (BSP) tree and virtual workspaces. It bypasses macOS's sluggish Space animations entirely — compute, hide, show, resize. Instantly.
 
@@ -54,7 +54,7 @@ This split means the entire tiling algorithm can be unit-tested without a displa
 **Phase 1 — Python Prototype**
 
 ```bash
-git clone https://github.com/anomalyco/tessera.git
+git clone https://github.com/Spidey03/tessera.git
 cd tessera
 
 python3 -m venv venv
@@ -109,6 +109,40 @@ Notes:
   ```
 - Logs go to `~/Library/Logs/Tessera/daemon.log` (stderr → `daemon.err.log`).
 - If Accessibility/Input Monitoring prompts appear after a reinstall (new binary path), grant them once.
+
+**Homebrew (recommended)**
+
+```bash
+# Tap the formula
+brew tap Spidey03/tessera
+
+# Build & install (requires a GitHub release tagged v0.4.0 — see Release Ritual below)
+brew install Spidey03/tessera/tessera
+```
+
+To test locally without a GitHub release, build from a local formula:
+
+```bash
+git archive --format=tar.gz -o /tmp/tessera-0.4.0.tar.gz HEAD
+# Edit Formula/tessera.rb to point at file:///tmp/tessera-0.4.0.tar.gz + fill sha256
+brew install --build-from-source Spidey03/tessera/tessera
+brew test Spidey03/tessera/tessera
+```
+
+**Release Ritual**
+
+1. Tag a release and push:
+   ```bash
+   git tag v0.4.0 && git push origin v0.4.0
+   ```
+2. Fill the formula's `sha256`:
+   ```bash
+   curl -Ls https://github.com/Spidey03/tessera/archive/refs/tags/v0.4.0.tar.gz | shasum -a 256
+   ```
+3. Install:
+   ```bash
+   brew install Spidey03/tessera/tessera
+   ```
 
 ### Hotkeys
 
@@ -203,7 +237,7 @@ tessera/
 - [x] Window role/subrole filtering refinements (config-overridable `excludedSubroles`)
 
 **Phase 4** — Polish, packaging, community
-- [ ] Homebrew formula
+- [x] Homebrew formula (`Formula/tessera.rb`, tag-based install)
 - [ ] Dock icon / menu bar app
 - [ ] Configuration UI (optional)
 
@@ -217,7 +251,7 @@ PRs are welcome. The project is small and the architecture is deliberately simpl
 - Body changes (macOS) go in `TesseraSystem/` or `TesseraDaemon/`.
 - Test coverage must be maintained. Run `swift run TesseraTests` (Swift) and `pytest` (Python) before opening a PR.
 
-For bugs or feature requests, open an issue at [github.com/anomalyco/tessera/issues](https://github.com/anomalyco/tessera/issues).
+For bugs or feature requests, open an issue at [github.com/Spidey03/tessera/issues](https://github.com/Spidey03/tessera/issues).
 
 ---
 
