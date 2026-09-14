@@ -23,9 +23,14 @@ private func describeFlags(_ f: CGEventFlags) -> String {
 }
 
 final class Daemon: @unchecked Sendable {
-    let tiler: Tiler
-    let bindings: [KeyBinding]
+    var tiler: Tiler
+    var bindings: [KeyBinding]
     let observer: WindowObserver
+
+    /// Retained observer token for the DistributedNotificationCenter command channel.
+    private var ipcObserver: NSObjectProtocol?
+    /// Retained signal source for graceful SIGTERM handling (launchctl stop).
+    private var termSignalSource: DispatchSourceSignal?
 
     /// Persistent BSP workspace state per display
     var currentWorkspaces: [CGDirectDisplayID: Workspace] = [:]
@@ -69,6 +74,9 @@ final class Daemon: @unchecked Sendable {
             print("Event tap is NOT valid — will not receive events.")
             exit(1)
         }
+
+        installSignalHandler()
+        startIPCLifecycle()
 
         let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .defaultMode)
@@ -118,6 +126,100 @@ final class Daemon: @unchecked Sendable {
         print("Listening for keyDown events...")
 
         CFRunLoopRun()
+    }
+
+    // MARK: - IPC (DistributedNotificationCenter)
+
+    /// Register a command listener, write the PID file, and announce the daemon
+    /// so the TesseraMenu status item can detect it.
+    private func startIPCLifecycle() {
+        let nc = DistributedNotificationCenter.default()
+        ipcObserver = nc.addObserver(forName: .tesseraCommand, object: nil, queue: .main) { [weak self] note in
+            guard let self else { return }
+            guard let action = note.userInfo?["action"] as? String else { return }
+            print("[ipc] command: \(action)")
+            self.handleAction(action)
+        }
+
+        let pid = ProcessInfo.processInfo.processIdentifier
+        let appSupport = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Tessera")
+        try? FileManager.default.createDirectory(at: appSupport, withIntermediateDirectories: true)
+        try? "\(pid)".write(to: appSupport.appendingPathComponent("daemon.pid"), atomically: true, encoding: .utf8)
+        nc.post(name: .tesseraDaemonDidStart, object: nil, userInfo: ["pid": pid])
+        print("IPC: listening on 'TesseraDaemonCommand' (pid \(pid))")
+    }
+
+    /// Announce shutdown and remove the PID file. Called on quit or SIGTERM.
+    private func stopIPCLifecycle() {
+        DistributedNotificationCenter.default().post(
+            name: .tesseraDaemonDidQuit,
+            object: nil,
+            userInfo: ["pid": ProcessInfo.processInfo.processIdentifier]
+        )
+        let pidFile = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Tessera/daemon.pid")
+        try? FileManager.default.removeItem(at: pidFile)
+    }
+
+    /// Graceful shutdown on `launchctl stop` / SIGTERM.
+    private func installSignalHandler() {
+        let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        source.setEventHandler { [weak self] in
+            print("[signal] SIGTERM received — quitting")
+            self?.handleAction("quit")
+        }
+        source.resume()
+        termSignalSource = source
+    }
+
+    /// Central action dispatch. Called from the event tap (hotkeys) and from
+    /// the IPC command channel. Main-thread only — tiling state lives there.
+    func handleAction(_ action: String) {
+        switch action {
+        case "tile":
+            print("[tile] starting...")
+            tileWithSuppression()
+            print("[tile] done")
+        case "focusLeft", "focus-left":
+            focusLeft()
+        case "focusRight", "focus-right":
+            focusRight()
+        case "focusUp":
+            focusUp()
+        case "focusDown":
+            focusDown()
+        case "remove":
+            removeFocused()
+        case "fullscreen":
+            toggleFullscreen()
+        case "toggleSplit", "toggle-split", "toggleSplitDirection":
+            toggleSplitDirection()
+        case "reload", "reloadConfig":
+            reloadConfig()
+        case "quit":
+            print("[quit] Quitting Tessera daemon.")
+            stopIPCLifecycle()
+            exit(0)
+        default:
+            print("[dispatch] unknown action: \(action)")
+        }
+    }
+
+    /// Re-read config.json, swap the tiler + hotkey bindings, reset per-display
+    /// state, and re-tile everything. Used by the menu bar app's "Reload config".
+    func reloadConfig() {
+        print("[reload] reloading config from disk")
+        let loaded = ConfigLoader.load()
+        tiler = Tiler(config: loaded.tesseraConfig)
+        bindings = loaded.bindings
+        currentWorkspaces = [:]
+        currentMappers = [:]
+        centeredFloaterIDs = []
+        fullscreenWindowID = nil
+        lastTileableFingerprints = [:]
+        print("[reload] config reloaded — re-tiling")
+        tileWithSuppression()
     }
 
     // MARK: - Fingerprints
@@ -539,65 +641,25 @@ private let eventTapCallback: CGEventTapCallBack = { proxy, type, event, userInf
     for binding in daemon.bindings {
         guard binding.matches(event: event) else { continue }
         print("[event] matched action: \(binding.action)")
-        switch binding.action {
-        case "tile":
-            CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue) {
-                print("[tile] starting...")
-                daemon.tileWithSuppression()
-                print("[tile] done")
-            }
-            CFRunLoopWakeUp(CFRunLoopGetMain())
-            print("[event] swallowed (tile)")
-            return nil
-        case "focusLeft", "focus-left":
-            CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue) {
-                daemon.focusLeft()
-            }
-            CFRunLoopWakeUp(CFRunLoopGetMain())
-            return nil
-        case "focusRight", "focus-right":
-            CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue) {
-                daemon.focusRight()
-            }
-            CFRunLoopWakeUp(CFRunLoopGetMain())
-            return nil
-        case "focusUp":
-            CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue) {
-                daemon.focusUp()
-            }
-            CFRunLoopWakeUp(CFRunLoopGetMain())
-            return nil
-        case "focusDown":
-            CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue) {
-                daemon.focusDown()
-            }
-            CFRunLoopWakeUp(CFRunLoopGetMain())
-            return nil
-        case "remove":
-            CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue) {
-                daemon.removeFocused()
-            }
-            CFRunLoopWakeUp(CFRunLoopGetMain())
-            return nil
-        case "fullscreen":
-            CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue) {
-                daemon.toggleFullscreen()
-            }
-            CFRunLoopWakeUp(CFRunLoopGetMain())
-            return nil
-        case "toggleSplit", "toggle-split", "toggleSplitDirection":
-            CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue) {
-                daemon.toggleSplitDirection()
-            }
-            CFRunLoopWakeUp(CFRunLoopGetMain())
-            return nil
-        case "quit":
-            print("[quit] Quitting Tessera daemon.")
-            exit(0)
-        default:
-            break
+        let action = binding.action
+        CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue) {
+            daemon.handleAction(action)
         }
+        CFRunLoopWakeUp(CFRunLoopGetMain())
+        print("[event] swallowed (\(action))")
+        return nil
     }
 
     return Unmanaged.passUnretained(event)
+}
+
+// MARK: - IPC notification names
+
+extension Notification.Name {
+    /// Posted by TesseraMenu (or any controller) with userInfo ["action": String].
+    static let tesseraCommand = Notification.Name("TesseraDaemonCommand")
+    /// Posted by the daemon on successful startup. userInfo: ["pid": Int].
+    static let tesseraDaemonDidStart = Notification.Name("TesseraDaemonDidStart")
+    /// Posted by the daemon right before it exits (quit hotkey, quit command, SIGTERM).
+    static let tesseraDaemonDidQuit = Notification.Name("TesseraDaemonDidQuit")
 }

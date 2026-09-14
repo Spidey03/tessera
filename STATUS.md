@@ -30,6 +30,12 @@
 - **Animations**: easeOutQuad slide animation with configurable steps/duration; skip no-op auto-tiles via tileable-window fingerprints
 - **Fullscreen toggle** (`⌘⌥F`): resizes focused window to fill its display; exiting restores its tile position
 
+### Menu bar companion (TesseraMenu)
+- **DistributedNotificationCenter IPC**: daemon listens on `TesseraDaemonCommand` (tile, focus*, remove, fullscreen, toggleSplit, reload, quit); posts `TesseraDaemonDidStart`/`DidQuit` and writes a PID file so the menu app detects liveness even if it launched after the daemon
+- **Centralized dispatch**: hotkeys and IPC commands both funnel through `Daemon.handleAction(_:)`; `Daemon.reloadConfig()` swaps tiler/config/bindings live then re-tiles
+- **NSStatusItem app** (`TesseraMenu`): SF-Symbol tile icon, green (running) / gray (stopped) dot, "Start at Login" toggle managing a `com.tessera.menu` LaunchAgent; start/stop daemon, tile now, reload config, open config file / logs folder
+- **Graceful shutdown**: SIGTERM (launchctl stop) handler posts `DidQuit` and removes the PID file
+
 ### Testing
 - 67 Swift tests (TesseraTests): BSP tree ops, spatial focus, split toggle, keybinding matching, ScreenManager rect/wallpaper logic, slot-preserving order, subrole filtering
 - 27 Python prototype tests (`tests/test_workspace.py`)
@@ -46,5 +52,5 @@
 
 ### Phase 4 — Polish & packaging
 - [x] Homebrew formula (tag-based, MIT, verified via local `brew install --build-from-source`)
-- [ ] Dock icon / menu bar app
+- [x] Menu bar app (`TesseraMenu` — status dot, tile/reload/start-stop, start-at-login)
 - [ ] Configuration UI (optional)

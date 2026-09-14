@@ -110,6 +110,22 @@ Notes:
 - Logs go to `~/Library/Logs/Tessera/daemon.log` (stderr → `daemon.err.log`).
 - If Accessibility/Input Monitoring prompts appear after a reinstall (new binary path), grant them once.
 
+**Menu bar companion (optional)**
+
+A menu bar status item that shows whether the daemon is running and can drive it without the terminal: tile now, reload config, open the config file / log folder, start/stop the daemon, and toggle start-at-login.
+
+```bash
+# Install: build release, write the plist, and load the agent
+./scripts/install_menu.sh
+
+# Remove: unload the agent, delete the plist and installed binary
+./scripts/uninstall_menu.sh
+```
+
+- The menu app communicates with the daemon via a DistributedNotificationCenter channel (`TesseraDaemonCommand`) plus a PID file; no elevated permissions needed.
+- The status dot turns green when the daemon is running (gray when stopped).
+- `Start at Login` installs the `com.tessera.menu` agent (this menu app only — the daemon is managed separately by `install_daemon.sh`).
+
 **Homebrew (recommended)**
 
 ```bash
@@ -199,12 +215,14 @@ tessera/
 │       ├── workspace.py
 │       └── split_type.py
 ├── tests/                      # Python tests (27)
-├── TesseraKit/                 # Swift production code
+├── scripts/                  # LaunchAgent install/uninstall (daemon + menu bar app)
+├── TesseraKit/               # Swift production code
 │   ├── Package.swift
 │   └── Sources/
 │       ├── TesseraKit/Core/    # Pure Swift BSP engine
 │       ├── TesseraSystem/      # macOS AX layer
 │       ├── TesseraDaemon/      # Orchestrator + event loop
+│       ├── TesseraMenu/        # Menu bar status/control app
 │       ├── TesseraTests/       # 67 Swift tests
 │       └── WindowDiscover/     # AX enumeration CLI
 └── README.md
@@ -238,7 +256,7 @@ tessera/
 
 **Phase 4** — Polish, packaging, community
 - [x] Homebrew formula (`Formula/tessera.rb`, tag-based install)
-- [ ] Dock icon / menu bar app
+- [x] Menu bar app (`TesseraMenu`, `scripts/install_menu.sh`)
 - [ ] Configuration UI (optional)
 
 ---
