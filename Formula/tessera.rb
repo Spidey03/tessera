@@ -2,7 +2,7 @@ class Tessera < Formula
   desc "BSP tiling window manager for macOS"
   homepage "https://github.com/Spidey03/tessera"
   url "https://github.com/Spidey03/tessera/archive/refs/tags/v0.4.0.tar.gz"
-  sha256 "f8b7b8a1107911845a40f17ec67ac3bf62338f6af39d8645bc077174678f2967"
+  sha256 "458150bf545f58625047bac791fb5eab59b86f93f7a00d64e6144c80ca3cd723"
   license "MIT"
 
   depends_on macos: :sonoma
