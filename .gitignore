@@ -15,3 +15,5 @@ venv/
 *.swp
 *.swo
 .DS_Store
+
+dist/

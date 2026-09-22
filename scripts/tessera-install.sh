@@ -110,9 +110,20 @@ check() {
         echo "       System Settings → Privacy & Security → Accessibility / Input Monitoring" >&2
         ok=1
     fi
+    if is_developer_signed "$BIN_DIR/Tessera.app" 2>/dev/null; then
+        echo "   [ok] app is Developer ID signed — silent launch at login"
+    elif is_developer_signed "$(command -v brew >/dev/null && brew --prefix tessera 2>/dev/null || true)/libexec/Tessera.app" 2>/dev/null; then
+        echo "   [ok] app is Developer ID signed — silent launch at login"
+    else
+        echo "   [..] unsigned build — daemon launched via Terminal lineage (#20)"
+    fi
     echo ""
     [ "$ok" = 0 ] && echo "All good." || { echo "Fix the items above, then reinstall."; }
     return "$ok"
+}
+
+is_developer_signed() {
+    codesign -dv "$1" 2>&1 | rg -q "Authority=Developer ID Application"
 }
 
 install() {
@@ -143,6 +154,20 @@ install() {
     cp "$script_src" "$BIN_DIR/auth_start.zsh"
     chmod +x "$BIN_DIR/auth_start.zsh"
 
+    # Tiling daemon launch style:
+    #  - Developer ID signed bundle -> launchd runs the daemon directly. Its
+    #    Apple-issued TeamIdentifier makes TCC honor Accessibility/Input
+    #    Monitoring grants, so login is fully silent (issue #13).
+    #  - unsigned/ad-hoc             -> open Terminal hidden (-gj) and run
+    #    auth_start.zsh inside it, so the daemon inherits your terminal's grants.
+    SIGNED_APP=false
+    if is_developer_signed "$BIN_DIR/Tessera.app"; then
+        SIGNED_APP=true
+        echo "   (app is Developer ID signed — silent startup, no Terminal)"
+    else
+        echo "   (unsigned app — daemon will launch via Terminal lineage)"
+    fi
+
     echo "==> Writing LaunchAgent plists"
     cat > "$HOME/Library/LaunchAgents/$LABEL_MENU.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -170,6 +195,15 @@ install() {
 </dict>
 </plist>
 PLIST
+    if [ "$SIGNED_APP" = true ]; then
+TILING_ARGS='<string>'"$BIN_DIR"'/Tessera.app/Contents/MacOS/TesseraDaemon</string>'
+    else
+TILING_ARGS='<string>/usr/bin/open</string>
+        <string>-gj</string>
+        <string>-a</string>
+        <string>Terminal</string>
+        <string>'"$BIN_DIR"'/auth_start.zsh</string>'
+    fi
     cat > "$HOME/Library/LaunchAgents/$LABEL_TILING.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -179,10 +213,7 @@ PLIST
     <string>$LABEL_TILING</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/bin/open</string>
-        <string>-a</string>
-        <string>Terminal</string>
-        <string>$BIN_DIR/auth_start.zsh</string>
+        $TILING_ARGS
     </array>
     <key>RunAtLoad</key>
     <true/>
@@ -207,12 +238,20 @@ PLIST
     echo "Done. Tessera installed as login items."
     echo "  App: $BIN_DIR/Tessera.app"
     echo ""
-    echo "Grant permissions ONCE in System Settings → Privacy & Security:"
-    echo "  Accessibility and Input Monitoring → add Terminal.app (or your terminal)."
-    echo "  The daemon inherits your terminal's grant; 'Tessera' itself can't be"
-    echo "  granted because it is not Apple-signed (no TeamIdentifier)."
-    echo ""
-    echo "A Terminal window appears briefly at login to launch the daemon."
+    if [ "$SIGNED_APP" = true ]; then
+        echo "Grant permissions ONCE in System Settings → Privacy & Security:"
+        echo "  Accessibility and Input Monitoring → add 'Tessera' itself."
+        echo "  (Developer ID signed — the daemon runs silently at login, no Terminal.)"
+    else
+        echo "Grant permissions ONCE in System Settings → Privacy & Security:"
+        echo "  Accessibility and Input Monitoring → add Terminal.app (or your terminal)."
+        echo "  The daemon inherits your terminal's grant; 'Tessera' itself can't be"
+        echo "  granted because it is not Apple-signed (no TeamIdentifier)."
+        echo ""
+        echo "A Terminal window may appear briefly at login to launch the daemon"
+        echo "  (silent launch needs a Developer ID signed build — issue #20)."
+    fi
+    echo "Open the privacy panes anytime via the menu bar → Grant Permissions."
     echo "Verify everything with:  tessera-install --check"
 }
 

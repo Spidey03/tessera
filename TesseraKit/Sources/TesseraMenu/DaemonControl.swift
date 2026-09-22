@@ -207,12 +207,22 @@ final class DaemonControl: NSObject, @unchecked Sendable {
     }
 
     private func writeTilingAgentPlist() {
+        // Launch style depends on how the installed bundle is signed:
+        //  - Developer ID signed -> launchd runs the daemon directly. Its
+        //    Apple-issued TeamIdentifier is what macOS TCC attributes grants
+        //    to, so login is fully silent (no Terminal window, issue #13).
+        //  - unsigned/ad-hoc     -> start through Terminal.app (-gj, hidden):
+        //    the only lineage whose Accessibility/Input Monitoring grants
+        //    survive; launchd children of an unsigned binary are always denied.
+        let program: [String]
+        if isDeveloperIDSigned() {
+            program = [daemonBinaryURL.path]
+        } else {
+            program = ["/usr/bin/open", "-gj", "-a", "Terminal", authStartScriptURL.path]
+        }
         let plist: [String: Any] = [
             "Label": "com.tessera.tiling",
-            // Start the daemon through Terminal.app: the only lineage whose
-            // Accessibility/Input Monitoring grants survive. launchd children —
-            // even signed bundles spawned directly — are always denied.
-            "ProgramArguments": ["/usr/bin/open", "-a", "Terminal", authStartScriptURL.path],
+            "ProgramArguments": program,
             "RunAtLoad": true,
             "KeepAlive": false,
             "ProcessType": "Interactive",
@@ -221,6 +231,28 @@ final class DaemonControl: NSObject, @unchecked Sendable {
         ]
         let data = try? PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
         try? data?.write(to: tilingAgentPlist, options: .atomic)
+    }
+
+    /// True when the installed app bundle carries an Apple "Developer ID
+    /// Application" code signature (TeamIdentifier — what TCC trusts).
+    private func isDeveloperIDSigned() -> Bool {
+        let app = appSupportDir.appendingPathComponent("Tessera.app")
+        guard FileManager.default.fileExists(atPath: app.path) else { return false }
+        let codesign = Process()
+        codesign.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
+        codesign.arguments = ["-dv", app.path]
+        let errPipe = Pipe()
+        codesign.standardError = errPipe
+        codesign.standardOutput = FileHandle.nullDevice
+        do {
+            try codesign.run()
+            codesign.waitUntilExit()
+            let data = errPipe.fileHandleForReading.readDataToEndOfFile()
+            return String(data: data, encoding: .utf8)?
+                .contains("Authority=Developer ID Application") ?? false
+        } catch {
+            return false
+        }
     }
 
     // MARK: - Open helpers
