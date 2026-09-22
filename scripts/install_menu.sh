@@ -72,7 +72,9 @@ launchctl kickstart "gui/$(id -u)/$LABEL"
 # GRANTED GUI app. We start it through Terminal.app, which holds the grants.
 TILING_LABEL="com.tessera.tiling"
 TILING_PLIST="$HOME/Library/LaunchAgents/$TILING_LABEL.plist"
-SCRIPT="$ROOT_DIR/scripts/auth_start.zsh"
+SCRIPT="$BIN_DIR/auth_start.zsh"
+cp "$ROOT_DIR/scripts/auth_start.zsh" "$SCRIPT"
+chmod +x "$SCRIPT"
 
 echo "==> Writing tiling LaunchAgent ($TILING_LABEL)"
 cat > "$TILING_PLIST" <<PLIST

@@ -12,6 +12,7 @@
 #     Contents/Info.plist         (bundle id com.spidey.tessera, LSUIElement)
 #     Contents/MacOS/TesseraMenu     menu bar app (bundle executable)
 #     Contents/MacOS/TesseraDaemon   daemon spawned by the menu app
+#     Contents/Resources/auth_start.zsh  daemon launcher for the tiling agent
 #
 # Usage: scripts/build_app.sh
 set -euo pipefail
@@ -24,16 +25,18 @@ BIN_DIR="$HOME/Library/Application Support/Tessera"
 DEST="$BIN_DIR/$APP_NAME.app"
 CONTENTS="$DEST/Contents"
 MACOS="$CONTENTS/MacOS"
+RESOURCES="$CONTENTS/Resources"
 
 echo "==> Building release binaries…"
 (cd "$ROOT_DIR/TesseraKit" && swift build -c release)
 
 echo "==> Assembling $APP_NAME.app"
 rm -rf "$DEST"
-mkdir -p "$MACOS"
+mkdir -p "$MACOS" "$RESOURCES"
 cp "$ROOT_DIR/TesseraKit/.build/release/TesseraMenu" "$MACOS/TesseraMenu"
 cp "$ROOT_DIR/TesseraKit/.build/release/TesseraDaemon" "$MACOS/TesseraDaemon"
 chmod +x "$MACOS/TesseraMenu" "$MACOS/TesseraDaemon"
+cp "$ROOT_DIR/scripts/auth_start.zsh" "$RESOURCES/auth_start.zsh"
 
 cat > "$CONTENTS/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
