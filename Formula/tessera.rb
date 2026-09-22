@@ -1,12 +1,8 @@
 class Tessera < Formula
   desc "BSP tiling window manager for macOS"
   homepage "https://github.com/Spidey03/tessera"
-  # TODO(release): fill sha256 after pushing the v0.4.0 tag:
-  #   git tag v0.4.0 && git push origin v0.4.0
-  #   curl -Ls https://github.com/Spidey03/tessera/archive/refs/tags/v0.4.0.tar.gz | shasum -a 256
   url "https://github.com/Spidey03/tessera/archive/refs/tags/v0.4.0.tar.gz"
-  version "0.4.0"
-  sha256 ""
+  sha256 "f8b7b8a1107911845a40f17ec67ac3bf62338f6af39d8645bc077174678f2967"
   license "MIT"
 
   depends_on macos: :sonoma
