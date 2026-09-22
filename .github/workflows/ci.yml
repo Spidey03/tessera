@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  swift:
+    name: Swift tests (TesseraKit)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build all targets
+        run: swift build --package-path TesseraKit
+
+      - name: Run Swift tests
+        run: swift run --package-path TesseraKit TesseraTests
+
+  python:
+    name: Python tests (prototype)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pytest
+        run: python3 -m pip install pytest --quiet
+
+      - name: Run Python tests
+        run: python3 -m pytest tests/ -q
