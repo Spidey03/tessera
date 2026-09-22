@@ -93,7 +93,7 @@ swift run TesseraDaemon
 
 **Auto-start on login (installed by `install_menu.sh`)**
 
-The menu bar app is bundled as `Tessera.app` (`com.spidey.tessera`) and launched at login by the `com.tessera.menu` LaunchAgent via `/usr/bin/open` (LaunchServices, so it runs as a proper GUI app). The *tiling daemon* is started separately by the `com.tessera.tiling` LaunchAgent, which opens **Terminal** once (`/usr/bin/open -a Terminal scripts/auth_start.zsh`): the daemon is born as a descendant of the granted `Terminal.app` and therefore gets real Accessibility + Input Monitoring. A Terminal window briefly appears at login.
+The menu bar app is bundled as `Tessera.app` (`com.spidey.tessera`) and launched at login by the `com.tessera.menu` LaunchAgent via `/usr/bin/open` (LaunchServices, so it runs as a proper GUI app). The *tiling daemon* is started separately by the `com.tessera.tiling` LaunchAgent, which opens **Terminal** once (`/usr/bin/open -a Terminal <app support>/auth_start.zsh`): the daemon is born as a descendant of the granted `Terminal.app` and therefore gets real Accessibility + Input Monitoring. A Terminal window briefly appears at login. The menu's **Start at Login** toggle installs/removes *both* agents together (the script is bundled in the app, so it works independently of the repo location).
 
 ```bash
 # Install: build Tessera.app, write both LaunchAgent plists, load them

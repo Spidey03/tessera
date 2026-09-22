@@ -11,6 +11,7 @@ final class DaemonControl: NSObject, @unchecked Sendable {
     private let configURL: URL
     private let logsURL: URL
     private let menuAgentPlist: URL
+    private let tilingAgentPlist: URL
 
     /// Retained observer tokens (DistributedNotificationCenter requires the
     /// returned token to be kept alive or the observation is silently dropped).
@@ -41,6 +42,7 @@ final class DaemonControl: NSObject, @unchecked Sendable {
         configURL = home.appendingPathComponent(".config/tessera/config.json")
         logsURL = home.appendingPathComponent("Library/Logs/Tessera")
         menuAgentPlist = home.appendingPathComponent("Library/LaunchAgents/com.tessera.menu.plist")
+        tilingAgentPlist = home.appendingPathComponent("Library/LaunchAgents/com.tessera.tiling.plist")
         super.init()
 
         let nc = DistributedNotificationCenter.default()
@@ -147,17 +149,42 @@ final class DaemonControl: NSObject, @unchecked Sendable {
         send("quit")
     }
 
-    // MARK: - Start at login (com.tessera.menu agent)
+    // MARK: - Start at login (com.tessera.menu + com.tessera.tiling agents)
 
     func setStartAtLogin(_ enabled: Bool) {
         if enabled {
+            prepareAuthStartScript()
             writeMenuAgentPlist()
+            writeTilingAgentPlist()
             _ = launchctl("bootstrap", ["gui/\(getuid())", menuAgentPlist.path])
+            _ = launchctl("bootstrap", ["gui/\(getuid())", tilingAgentPlist.path])
         } else {
             _ = launchctl("bootout", ["gui/\(getuid())/com.tessera.menu"])
+            _ = launchctl("bootout", ["gui/\(getuid())/com.tessera.tiling"])
             try? FileManager.default.removeItem(at: menuAgentPlist)
+            try? FileManager.default.removeItem(at: tilingAgentPlist)
         }
+        // A running daemon is left alone: this only controls login startups.
         onStatusChange?()
+    }
+
+    /// The stable location the tiling agent points at. The script is copied
+    /// from the app bundle so it never depends on where the repo lives.
+    private var authStartScriptURL: URL {
+        appSupportDir.appendingPathComponent("auth_start.zsh")
+    }
+
+    private func prepareAuthStartScript() {
+        let fm = FileManager.default
+        if let resource = Bundle.main.resourceURL?.appendingPathComponent("auth_start.zsh"),
+           fm.fileExists(atPath: resource.path),
+           let data = try? Data(contentsOf: resource) {
+            try? fm.createDirectory(at: appSupportDir, withIntermediateDirectories: true)
+            try? data.write(to: authStartScriptURL, options: .atomic)
+            try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: authStartScriptURL.path)
+        } else if !fm.fileExists(atPath: authStartScriptURL.path) {
+            print("[menu] warning: bundled auth_start.zsh unavailable; tiling agent won't start the daemon")
+        }
     }
 
     private func writeMenuAgentPlist() {
@@ -177,6 +204,23 @@ final class DaemonControl: NSObject, @unchecked Sendable {
         let data = try? PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
         try? FileManager.default.createDirectory(at: logsURL, withIntermediateDirectories: true)
         try? data?.write(to: menuAgentPlist, options: .atomic)
+    }
+
+    private func writeTilingAgentPlist() {
+        let plist: [String: Any] = [
+            "Label": "com.tessera.tiling",
+            // Start the daemon through Terminal.app: the only lineage whose
+            // Accessibility/Input Monitoring grants survive. launchd children —
+            // even signed bundles spawned directly — are always denied.
+            "ProgramArguments": ["/usr/bin/open", "-a", "Terminal", authStartScriptURL.path],
+            "RunAtLoad": true,
+            "KeepAlive": false,
+            "ProcessType": "Interactive",
+            "StandardOutPath": appSupportDir.appendingPathComponent("tiling.log").path,
+            "StandardErrorPath": appSupportDir.appendingPathComponent("tiling.err.log").path,
+        ]
+        let data = try? PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+        try? data?.write(to: tilingAgentPlist, options: .atomic)
     }
 
     // MARK: - Open helpers
