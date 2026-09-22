@@ -14,6 +14,14 @@ struct DisplayTileResult {
 
 struct Tiler {
     let config: TesseraConfig
+    /// The layout algorithm applied at tile time. Starts from `config.layoutMode`
+    /// and can be cycled at runtime (hotkey/IPC); reset on config reload.
+    var layoutMode: LayoutMode
+
+    init(config: TesseraConfig) {
+        self.config = config
+        self.layoutMode = config.layoutMode
+    }
 
     /// Tiles every display's windows into its own BSP workspace.
     /// `previousOrderKeys` maps each display to the previous layout's window
@@ -97,12 +105,9 @@ struct Tiler {
         var mapper = WindowMapper(realWindows: windows)
         print("[tiler] mapped \(mapper.pureWindows.count) pure windows (\(tiledIDs.count) tiled, \(ignoreIDs.count) ignored, \(floaterIDs.count) floated)")
 
-        // Build BSP tree with only tiled windows
-        let workspace = Workspace(monitorRect: screenRect, config: config)
-        for id in orderedTiledIDs {
-            workspace.addWindow(Window(id: id))
-        }
-        workspace.reassignLayoutOrder(orderedTiledIDs)
+        // Build the display tree with only tiled windows, using the active
+        // layout mode (bsp, masterStack or columns).
+        let workspace = makeWorkspace(ordered: orderedTiledIDs, screenRect: screenRect)
 
         let layout = workspace.getLayout()
         print("[tiler]   layout has \(layout.count) entries:")
@@ -125,11 +130,7 @@ struct Tiler {
                 print("[tiler]   all remaining windows overflowed — giving up")
                 break
             }
-            resultWorkspace = Workspace(monitorRect: screenRect, config: config)
-            for id in remainingOrdered {
-                resultWorkspace.addWindow(Window(id: id))
-            }
-            resultWorkspace.reassignLayoutOrder(remainingOrdered)
+            resultWorkspace = makeWorkspace(ordered: remainingOrdered, screenRect: screenRect)
             let newLayout = resultWorkspace.getLayout()
             if newLayout.isEmpty { break }
             (targets, floated) = mapper.computeLayout(newLayout, screenRect: screenRect)
@@ -147,6 +148,14 @@ struct Tiler {
             newlyFloated: allFloated,
             animationTargets: finalTargets
         )
+    }
+
+    /// Fresh tree for `orderedIDs` under the active layout mode. Windows keep
+    /// their previous slots because order is preserved by the caller.
+    private func makeWorkspace(ordered orderedTiledIDs: [String], screenRect: Rect) -> Workspace {
+        let workspace = Workspace(monitorRect: screenRect, config: config)
+        workspace.applyPreset(layoutMode, orderedIDs: orderedTiledIDs)
+        return workspace
     }
 
     func filterWindows(_ allWindows: [MacWindow]) -> [MacWindow] {

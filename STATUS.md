@@ -6,6 +6,7 @@
 - **BSP tree** with `addWindow` (splits largest leaf), `removeWindow` (collapses parent), `getLayout` (in-order leaves)
 - **Geometry-based split direction**: split the longer dimension of the target leaf (wider → vertical, taller → horizontal). Removed global V/H alternation.
 - **Split direction toggle** (`⌘⌥Space`): flips the focused window's parent split and reflows its subtree.
+- **Layout presets** (`layoutMode`: `bsp` | `masterStack` | `columns`): master-stack gives the first window a `masterRatio` pane with the rest as rows; columns are equal-width. Switch live via `⌘⌥.`, the menu's **Cycle Layout**, or IPC `cycleLayout` / `setLayout:<mode>`; runtime mode resets to the config on reload.
 - **Gap system**: `gapSize/2` inset from each tile edge, `outerGap` inset from screen edges, configurable via config file
 - **Spatial focus navigation**: `focusLeft/Right/Up/Down` pick the nearest window in that direction (by proximity + overlap); `cycleNext/Prev` for tab-order cycling; `focusedWindowID` tracks the focused leaf
 - **Largest-leaf strategy**: `findLargestLeaf()` replaces `findFocusedLeaf()` for balanced BSP tree; ties go to left child
@@ -14,7 +15,7 @@
 - **MacWindow**: AXUIElement wrapper with `setPosition`, `setSize`, `setPosition`, `actualSize`, `role`/`subrole`, `bundleID`
 - **WindowDiscovery**: enumerates running apps and their windows via AX
 - **WindowObserver**: subscribes to `kAXWindowCreatedNotification` per app; debounced callback triggers auto-tile; drag-triggered re-tile on move/resize (0.25s drag debounce); AX destroy notification replaces old polling
-- **Config loader** (`ConfigLoader.swift`): reads `~/.config/tessera/config.json` (gapSize, outerGap, newWindowFocus, animation, multiMonitor, appRules, hotkey overrides); writes example config on first run; malformed file falls back to defaults
+- **Config loader** (`ConfigLoader.swift`): reads `~/.config/tessera/config.json` (gapSize, outerGap, layoutMode, masterRatio, newWindowFocus, animation, multiMonitor, appRules, hotkey overrides); writes example config on first run; malformed file falls back to defaults
 - **ScreenManager**: per-display rect conversion (NSScreen bottom-left → AX top-left coords), window/point-to-display lookup, desktop-wallpaper detection (incl. windows spanning multiple displays)
 
 ### Daemon

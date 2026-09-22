@@ -16,6 +16,8 @@ struct MultiMonitorConfigFile: Codable {
 struct TesseraConfigFile: Codable {
     var gapSize: Double?
     var outerGap: Double?
+    var layoutMode: String?
+    var masterRatio: Double?
     var newWindowFocus: Bool?
     var floatingApps: [String]?
     var animationEnabled: Bool?
@@ -75,6 +77,11 @@ enum ConfigLoader {
             let example: [String: Any] = [
                 "gapSize": 8.0,
                 "outerGap": 4.0,
+                // Layout algorithm applied at startup: bsp | masterStack | columns.
+                // Cycle live with the cycleLayout hotkey (or "cycleLayout" IPC action).
+                "layoutMode": "bsp",
+                // Fraction of screen width given to the master pane in masterStack.
+                "masterRatio": 0.6,
                 "newWindowFocus": false,
                 // Legacy key: still supported for backward compatibility (auto-migrated to appRules)
                 "floatingApps": ["com.spotify.client"],
@@ -111,6 +118,7 @@ enum ConfigLoader {
                     "focusDown": ["keyCode": 46, "flags": ["cmd", "opt"]],
                     "fullscreen": ["keyCode": 3, "flags": ["cmd", "opt"]],
                     "toggleSplit": ["keyCode": 49, "flags": ["cmd", "opt"]],
+                    "cycleLayout": ["keyCode": 47, "flags": ["cmd", "opt"]],
                     "quit": ["keyCode": 12, "flags": ["cmd", "opt", "shift"]],
                 ],
             ]
@@ -140,6 +148,8 @@ enum ConfigLoader {
         return TesseraConfig(
             gapSize: fc.gapSize ?? defaults.gapSize,
             outerGap: fc.outerGap ?? defaults.outerGap,
+            layoutMode: parseLayoutMode(fc.layoutMode) ?? defaults.layoutMode,
+            masterRatio: fc.masterRatio ?? defaults.masterRatio,
             newWindowFocus: fc.newWindowFocus ?? defaults.newWindowFocus,
             floatingAppIDs: fc.floatingApps ?? defaults.floatingAppIDs,
             appRules: mergedAppRules,
@@ -151,6 +161,16 @@ enum ConfigLoader {
                 focusMode: fc.multiMonitor?.focusMode ?? MultiMonitorConfig().focusMode
             )
         )
+    }
+
+    /// Parse the `"layoutMode"` string. Unknown values warn and return nil
+    /// (caller falls back to the default `bsp`).
+    private static func parseLayoutMode(_ raw: String?) -> LayoutMode? {
+        guard let raw, let mode = LayoutMode(rawValue: raw) else {
+            if let raw { print("[config] WARNING: unknown layoutMode '\(raw)' — using bsp") }
+            return nil
+        }
+        return mode
     }
 
     static func defaultBindings() -> [KeyBinding] {
@@ -165,6 +185,7 @@ enum ConfigLoader {
             KeyBinding(keyCode: 46, flags: [.maskCommand, .maskAlternate], action: "focusDown"),    // M
             KeyBinding(keyCode: 3, flags: [.maskCommand, .maskAlternate], action: "fullscreen"),
             KeyBinding(keyCode: 49, flags: [.maskCommand, .maskAlternate], action: "toggleSplit"), // Space
+            KeyBinding(keyCode: 47, flags: [.maskCommand, .maskAlternate], action: "cycleLayout"), // Period: bsp→master→columns
             KeyBinding(keyCode: 12, flags: [.maskCommand, .maskAlternate, .maskShift], action: "quit"),
         ]
     }
