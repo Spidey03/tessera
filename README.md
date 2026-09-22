@@ -99,8 +99,10 @@ The menu bar app is bundled as `Tessera.app` (`com.spidey.tessera`) and launched
 # Install: build Tessera.app, write both LaunchAgent plists, load them
 ./scripts/install_menu.sh
 
-# Remove: unload the agents, delete the plists and installed app
-./scripts/uninstall_menu.sh
+# Remove: unload both agents, stop daemon/menu, delete app + logs
+# (keeps ~/.config/tessera unless you pass --purge)
+./scripts/uninstall.sh
+# ./scripts/uninstall.sh --purge   # also remove your config
 ```
 
 Notes:
