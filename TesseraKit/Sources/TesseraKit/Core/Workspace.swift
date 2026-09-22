@@ -142,6 +142,92 @@ public final class Workspace: @unchecked Sendable {
         return result
     }
 
+    /// (Re)build the display's tree for `mode` from the ordered window IDs,
+    /// then pin windows to their leaf slots (`reassignLayoutOrder`). The tree
+    /// is fully derived from the ordered list, so a re-tile rebuilds it the
+    /// same way each time and window order continues to be preserved.
+    public func applyPreset(_ mode: LayoutMode, orderedIDs: [String]) {
+        guard !orderedIDs.isEmpty else {
+            root = nil
+            return
+        }
+        let gap = config.gapSize / 2.0
+        let usable = monitorRect.inset(by: config.outerGap)
+        switch mode {
+        case .bsp:
+            root = nil
+            for id in orderedIDs { addWindow(Window(id: id)) }
+        case .masterStack:
+            root = makeMasterStackTree(ids: orderedIDs, usable: usable)
+        case .columns:
+            root = makeColumnsTree(ids: orderedIDs, usable: usable)
+        }
+        if root == nil, let first = orderedIDs.first {
+            var w = Window(id: first)
+            w.rect = usable.inset(by: gap)
+            root = TreeNode(rect: usable, window: w, isFocused: true)
+        }
+        reassignLayoutOrder(orderedIDs)
+    }
+
+    /// masterStack: master (first window) at `masterRatio` width on the left,
+    /// the remainder as equal-height rows stacked in the right column.
+    /// A single window fills the whole usable area (master only).
+    private func makeMasterStackTree(ids: [String], usable: Rect) -> TreeNode? {
+        guard let first = ids.first else { return nil }
+        let rest = Array(ids.dropFirst())
+        let masterWidth = rest.isEmpty ? usable.width : usable.width * config.masterRatio
+        let masterRect = Rect(x: usable.x, y: usable.y, width: masterWidth, height: usable.height)
+        let masterLeaf = TreeNode(rect: masterRect, window: Window(id: first), isFocused: true)
+        guard !rest.isEmpty else { return masterLeaf }
+
+        let stackRect = Rect(x: usable.x + masterWidth, y: usable.y, width: usable.width - masterWidth, height: usable.height)
+        let rowHeight = stackRect.height / Double(rest.count)
+        let rowLeaves: [TreeNode] = rest.enumerated().map { index, id in
+            let r = Rect(x: stackRect.x, y: stackRect.y + rowHeight * Double(index), width: stackRect.width, height: rowHeight)
+            return TreeNode(rect: r, window: Window(id: id), isFocused: false)
+        }
+        return combineBinary(rowLeaves, adding: masterLeaf, split: .vertical, whole: usable)
+    }
+
+    /// columns: every window as an equal-width, full-height column.
+    private func makeColumnsTree(ids: [String], usable: Rect) -> TreeNode? {
+        guard !ids.isEmpty else { return nil }
+        let columnWidth = usable.width / Double(ids.count)
+        let leaves: [TreeNode] = ids.enumerated().map { index, id in
+            let r = Rect(x: usable.x + columnWidth * Double(index), y: usable.y, width: columnWidth, height: usable.height)
+            return TreeNode(rect: r, window: Window(id: id), isFocused: index == 0)
+        }
+        return combineBinary(leaves, split: .vertical, whole: usable)
+    }
+
+    /// Fold `leaves` into a balanced binary tree using `whole` as every
+    /// internal node's rect. `head` (if given) becomes the FIRST in-order leaf
+    /// — it must be, because `reassignLayoutOrder` pins rank 0 to the first
+    /// traversal leaf. Internal nodes are only used for traversal (focus
+    /// search); leaf geometry is stored on the leaves themselves.
+    private func combineBinary(_ leaves: [TreeNode], adding head: TreeNode? = nil, split: SplitType, whole: Rect) -> TreeNode {
+        var nodes = leaves
+        if let head { nodes = [head] + nodes }
+        while nodes.count > 1 {
+            var next: [TreeNode] = []
+            var i = 0
+            while i < nodes.count {
+                let a = nodes[i]
+                if i + 1 < nodes.count {
+                    let b = nodes[i + 1]
+                    next.append(TreeNode(rect: whole, leftChild: a, rightChild: b, splitType: split, isFocused: false))
+                    i += 2
+                } else {
+                    next.append(a)
+                    i += 1
+                }
+            }
+            nodes = next
+        }
+        return nodes[0]
+    }
+
     /// Reassigns leaf windows in in-order traversal to `orderedIDs`, preserving
     /// each leaf's geometry (its tile slot). This is what keeps windows in their
     /// slot across re-tiles: leaf geometry is order-invariant for a given window

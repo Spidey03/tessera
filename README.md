@@ -163,10 +163,18 @@ brew test Spidey03/tessera/tessera
 | `⌘⌥H` / `⌘⌥K` | Focus left / previous |
 | `⌘⌥J` / `⌘⌥L` | Focus right / next |
 | `⌘⌥W` | Remove focused window |
+| `⌘⌥F` | Toggle fullscreen |
+| `⌘⌥Space` | Toggle split direction (bsp mode) |
+| `⌘⌥.` | Cycle layout: bsp → master-stack → columns |
 | `⌘⌥⇧Q` | Quit daemon |
 
 ### Layout Behavior
 
+- **Layout presets** (`layoutMode` in `~/.config/tessera/config.json`, default `bsp`):
+  - **bsp** — binary space partition tree (default, split-direction toggle per node)
+  - **masterStack** — first window as a fixed-ratio master pane, the rest stacked as rows in the remaining column
+  - **columns** — all windows as equal-width columns
+  Cycle live with `⌘⌥.`, the menu's **Cycle Layout** item, or IPC `cycleLayout` / `setLayout:masterStack`. The runtime mode resets to the config value on reload/restart.
 - **Split direction** is geometry-based: split the longer dimension of the target leaf (wider → vertical, taller → horizontal).
 - **New window** splits the largest leaf by area for balanced tile sizes.
 - **Focus** stays on the existing window after a split (configurable via `~/.config/tessera/config.json`).

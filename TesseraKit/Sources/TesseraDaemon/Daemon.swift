@@ -114,6 +114,7 @@ final class Daemon: @unchecked Sendable {
         print("  ⌘⌥I/M — focus up/down")
         print("  ⌘⌥F   — toggle fullscreen")
         print("  ⌘⌥Space — toggle split direction")
+        print("  ⌘⌥.   — cycle layout (bsp → master-stack → columns)")
         print("Listening for keyDown events...")
 
         CFRunLoopRun()
@@ -186,6 +187,10 @@ final class Daemon: @unchecked Sendable {
             toggleFullscreen()
         case "toggleSplit", "toggle-split", "toggleSplitDirection":
             toggleSplitDirection()
+        case "cycleLayout", "cycle-layout":
+            cycleLayout()
+        case let action where action.hasPrefix("setLayout:"):
+            setLayout(String(action.dropFirst("setLayout:".count)))
         case "reload", "reloadConfig":
             reloadConfig()
         case "quit":
@@ -488,7 +493,33 @@ final class Daemon: @unchecked Sendable {
         observer.isSuppressed = false
     }
 
+    // MARK: - Layout presets
+
+    /// Cycle the layout mode (bsp → masterStack → columns → bsp) and re-tile
+    /// every display with the new geometry.
+    func cycleLayout() {
+        tiler.layoutMode = tiler.layoutMode.next()
+        print("[layout] switching to '\(tiler.layoutMode.rawValue)'")
+        tileWithSuppression()
+    }
+
+    /// Switch to a specific layout mode by name ("bsp", "masterStack", "columns")
+    /// and re-tile. Unknown names are rejected.
+    func setLayout(_ raw: String) {
+        guard let mode = LayoutMode(rawValue: raw) else {
+            print("[layout] unknown layout '\(raw)' — expected bsp, masterStack or columns")
+            return
+        }
+        tiler.layoutMode = mode
+        print("[layout] switching to '\(mode.rawValue)'")
+        tileWithSuppression()
+    }
+
     func toggleSplitDirection() {
+        guard tiler.layoutMode == .bsp else {
+            print("[split] toggle is only supported in bsp mode (current: \(tiler.layoutMode.rawValue))")
+            return
+        }
         guard let displayID = activeDisplayID() else { print("[split] no displays — tile first"); return }
         guard let ws = currentWorkspaces[displayID] else { print("[split] no workspace — tile first"); return }
         guard var mapper = currentMappers[displayID] else { print("[split] no mapper — tile first"); return }

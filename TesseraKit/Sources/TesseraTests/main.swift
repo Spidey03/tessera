@@ -774,6 +774,107 @@ func testTesseraConfigDefaultExcludedSubroles() throws {
     try assertEqual(config.excludedSubroles, Array(AXSubrole.excludedDefaults).sorted())
 }
 
+// MARK: - Layout presets (masterStack / columns)
+
+private let presetRect = Rect(x: 0, y: 0, width: 1920, height: 1080)
+private let presetConfig = TesseraConfig(layoutMode: .masterStack, masterRatio: 0.6)
+private func layoutFor(_ ids: [String], mode: LayoutMode = .masterStack) -> [(Window, Rect)] {
+    let ws = Workspace(monitorRect: presetRect, config: mode == .masterStack ? presetConfig : TesseraConfig(layoutMode: mode))
+    ws.applyPreset(mode, orderedIDs: ids)
+    return ws.getLayout()
+}
+private func rounded(_ r: Rect) -> [Int] {
+    [Int(r.x.rounded()), Int(r.y.rounded()), Int(r.width.rounded()), Int(r.height.rounded())]
+}
+
+func testLayoutModeCycleOrder() throws {
+    let sequence = [LayoutMode.bsp, LayoutMode.columns, LayoutMode.masterStack]
+    for mode in sequence {
+        try assertEqual(mode.next(), LayoutMode.allCases[(LayoutMode.allCases.firstIndex(of: mode)! + 1) % LayoutMode.allCases.count])
+    }
+    try assertEqual(LayoutMode(rawValue: "masterStack"), .masterStack)
+    try assertEqual(LayoutMode(rawValue: "columns"), .columns)
+    try assertNil(LayoutMode(rawValue: "unknown"))
+    try assertEqual(TesseraConfig().layoutMode, .bsp)
+}
+
+func testMasterStackSingleWindowFillsArea() throws {
+    let layout = layoutFor(["A"])
+    try assertEqual(layout.count, 1)
+    try assertEqual(rounded(layout[0].1), [8, 8, 1904, 1064])
+}
+
+func testMasterStackTwoWindowsMasterBetterThanCrisscross() throws {
+    let layout = layoutFor(["A", "B"])
+    try assertEqual(layout.count, 2)
+    let a = layout.first { $0.0.id == "A" }!.1
+    let b = layout.first { $0.0.id == "B" }!.1
+    try assertEqual(rounded(a), [8, 8, 1139, 1064]) // master = 60% of usable width
+    try assertEqual(rounded(b), [1155, 8, 757, 1064]) // stack column on the right
+}
+
+func testMasterStackThreeWindowsStackAsRows() throws {
+    let layout = layoutFor(["A", "B", "C"])
+    try assertEqual(layout.count, 3)
+    let a = layout.first { $0.0.id == "A" }!.1
+    let b = layout.first { $0.0.id == "B" }!.1
+    let c = layout.first { $0.0.id == "C" }!.1
+    try assertEqual(rounded(a), [8, 8, 1139, 1064]) // master keeps full height
+    try assertEqual(rounded(b), [1155, 8, 757, 528]) // row 1
+    try assertEqual(rounded(c), [1155, 544, 757, 528]) // row 2 below row 1
+    try assertEqual(Int(b.width), Int(c.width))
+    try assertLessThan(b.y, c.y)
+}
+
+func testMasterStackSlotPreservedAcrossRetile() throws {
+    let first = layoutFor(["A", "B", "C"])
+    let second = layoutFor(["A", "B", "C"])
+    try assertEqual(second.first { $0.0.id == "A" }!.1, first.first { $0.0.id == "A" }!.1)
+    try assertEqual(second.first { $0.0.id == "C" }!.1, first.first { $0.0.id == "C" }!.1)
+}
+
+func testMasterStackMasterIsFirstWindow() throws {
+    let layout = layoutFor(["B", "A"])
+    let b = layout.first { $0.0.id == "B" }!.1
+    try assertEqual(rounded(b), [8, 8, 1139, 1064])
+}
+
+func testMasterStackRemoveWindowSucceeds() throws {
+    let ws = Workspace(monitorRect: presetRect, config: presetConfig)
+    ws.applyPreset(.masterStack, orderedIDs: ["A", "B", "C"])
+    let removed = ws.removeWindow(id: "B")
+    try assertEqual(removed?.id, "B")
+    try assertEqual(ws.getLayout().count, 2)
+}
+
+func testColumnsGetEqualWidth() throws {
+    let layout = layoutFor(["A", "B", "C"], mode: .columns)
+    try assertEqual(layout.count, 3)
+    let sorted = layout.sorted { $0.1.x < $1.1.x }
+    let widths = Set(sorted.map { Int($0.1.width.rounded()) })
+    try assertEqual(widths.count, 1)
+    let heights = Set(sorted.map { Int($0.1.height.rounded()) })
+    try assertEqual(heights.count, 1)
+    try assertEqual(Int(sorted[0].1.y.rounded()), 8)
+}
+
+func testColumnsSplitAdjustsWithCount() throws {
+    let two = layoutFor(["A", "B"], mode: .columns).sorted { $0.1.x < $1.1.x }
+    let three = layoutFor(["A", "B", "C"], mode: .columns).sorted { $0.1.x < $1.1.x }
+    try assertEqual(Int(two[0].1.width.rounded()), 948)
+    try assertLessThan(three[0].1.width, two[0].1.width)
+    try assertEqual(two[0].1.x, three[0].1.x)
+    try assertLessThan(three[0].1.x, three[1].1.x)
+}
+
+func testApplyPresetEmptyClearsTree() throws {
+    let ws = Workspace(monitorRect: presetRect, config: presetConfig)
+    ws.applyPreset(.masterStack, orderedIDs: ["A"])
+    try assert(ws.root != nil, "expected tree after adding A")
+    ws.applyPreset(.masterStack, orderedIDs: [])
+    try assertNil(ws.root)
+}
+
 // MARK: - Runner
 
 let tests: [(String, () throws -> Void)] = [
@@ -852,6 +953,17 @@ let tests: [(String, () throws -> Void)] = [
     ("WindowFilter empty override tiles everything standard", testWindowFilterEmptyOverrideTilesEverythingStandard),
     ("WindowFilter rejects zero size", testWindowFilterRejectsZeroSize),
     ("TesseraConfig default excludedSubroles", testTesseraConfigDefaultExcludedSubroles),
+    // Layout presets
+    ("LayoutMode cycle order + raw values", testLayoutModeCycleOrder),
+    ("masterStack single window fills area", testMasterStackSingleWindowFillsArea),
+    ("masterStack two windows master + stack column", testMasterStackTwoWindowsMasterBetterThanCrisscross),
+    ("masterStack three windows stack as rows", testMasterStackThreeWindowsStackAsRows),
+    ("masterStack slot preserved across retile", testMasterStackSlotPreservedAcrossRetile),
+    ("masterStack master is first window", testMasterStackMasterIsFirstWindow),
+    ("masterStack remove window succeeds", testMasterStackRemoveWindowSucceeds),
+    ("columns get equal width/height", testColumnsGetEqualWidth),
+    ("columns split adjusts with count", testColumnsSplitAdjustsWithCount),
+    ("applyPreset empty clears tree", testApplyPresetEmptyClearsTree),
 ]
 
 var passed = 0

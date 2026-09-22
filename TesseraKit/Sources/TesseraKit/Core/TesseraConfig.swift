@@ -23,6 +23,12 @@ public struct TesseraConfig: Sendable, Equatable {
     public var gapSize: Double
     public var outerGap: Double
     public var initialSplit: SplitType
+    /// The tiling algorithm applied at startup (see `LayoutMode`). The daemon
+    /// can cycle through modes at runtime without touching this file.
+    public var layoutMode: LayoutMode
+    /// Fraction of the screen given to the master pane in `masterStack` mode
+    /// (0 < masterRatio < 1).
+    public var masterRatio: Double
     public var newWindowFocus: Bool
     public var floatingAppIDs: [String]
     /// Per-app tiling rules: app bundle ID → how it's tiled.
@@ -39,6 +45,8 @@ public struct TesseraConfig: Sendable, Equatable {
         gapSize: Double = 8,
         outerGap: Double = 4,
         initialSplit: SplitType = .vertical,
+        layoutMode: LayoutMode = .bsp,
+        masterRatio: Double = 0.6,
         newWindowFocus: Bool = false,
         floatingAppIDs: [String] = [],
         appRules: [String: AppTilingRule] = [:],
@@ -51,6 +59,8 @@ public struct TesseraConfig: Sendable, Equatable {
         self.gapSize = gapSize
         self.outerGap = outerGap
         self.initialSplit = initialSplit
+        self.layoutMode = layoutMode
+        self.masterRatio = masterRatio
         self.newWindowFocus = newWindowFocus
         self.floatingAppIDs = floatingAppIDs
         self.appRules = appRules
@@ -65,6 +75,8 @@ public struct TesseraConfig: Sendable, Equatable {
         lhs.gapSize == rhs.gapSize &&
             lhs.outerGap == rhs.outerGap &&
             lhs.initialSplit == rhs.initialSplit &&
+            lhs.layoutMode == rhs.layoutMode &&
+            lhs.masterRatio == rhs.masterRatio &&
             lhs.newWindowFocus == rhs.newWindowFocus &&
             lhs.floatingAppIDs == rhs.floatingAppIDs &&
             lhs.appRules == rhs.appRules &&

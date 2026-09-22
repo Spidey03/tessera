@@ -12,6 +12,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let startStopItem = NSMenuItem(title: "", action: #selector(toggleStartStop), keyEquivalent: "")
     private let tileItem = NSMenuItem(title: "Tile Windows Now", action: #selector(tileNow), keyEquivalent: "")
     private let reloadItem = NSMenuItem(title: "Reload Config", action: #selector(reloadConfig), keyEquivalent: "")
+    private let cycleLayoutItem = NSMenuItem(title: "Cycle Layout", action: #selector(cycleLayout), keyEquivalent: "")
     private let startAtLoginItem = NSMenuItem(title: "Start at Login", action: #selector(toggleStartAtLogin), keyEquivalent: "")
 
     init(control: DaemonControl) {
@@ -28,7 +29,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
         let menu = NSMenu()
         menu.delegate = self
-        for item in [tileItem, reloadItem] {
+        for item in [tileItem, reloadItem, cycleLayoutItem] {
             item.target = self
             menu.addItem(item)
         }
@@ -97,6 +98,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
         tileItem.isEnabled = running
         reloadItem.isEnabled = running
+        cycleLayoutItem.isEnabled = running
         startStopItem.title = running ? "Stop Daemon" : "Start Daemon"
         startStopItem.isEnabled = true
         startAtLoginItem.state = control.isStartAtLoginEnabled ? .on : .off
@@ -107,6 +109,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     @objc private func tileNow() {
         control.send("tile")
+    }
+
+    @objc private func cycleLayout() {
+        control.send("cycleLayout")
     }
 
     @objc private func reloadConfig() {
