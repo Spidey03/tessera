@@ -21,6 +21,16 @@ final class DaemonControl: NSObject, @unchecked Sendable {
     /// menu opens / notification delivery.
     private var pollTimer: Timer?
 
+    /// The daemon process we spawned. Retained so the child stays a child
+    /// (TCC grants inherit down the parent chain) and to know when it exits.
+    private var daemonProcess: Process?
+
+    /// The daemon lives inside the app bundle next to the menu executable so
+    /// the child inherits the bundle's accessibility/input-monitoring trust.
+    private var daemonBinaryURL: URL {
+        appSupportDir.appendingPathComponent("Tessera.app/Contents/MacOS/TesseraDaemon")
+    }
+
     /// Called whenever running state or start-at-login state may have changed.
     var onStatusChange: (() -> Void)?
 
@@ -87,23 +97,48 @@ final class DaemonControl: NSObject, @unchecked Sendable {
         )
     }
 
-    /// Start the daemon: prefer the LaunchAgent (install_daemon.sh), otherwise
-    /// spawn the installed binary directly.
+    /// Spawn the installed daemon binary as a child of the menu app.
+    ///
+    /// Deliberately NOT a separate LaunchAgent: TCC accessibility/input-monitoring
+    /// grants are inherited down the parent chain, but macOS ignores them for a
+    /// bare daemon binary spawned directly by launchd. Keeping it our child means
+    /// the user grants permissions to the menu app once and the daemon inherits.
     func startDaemon() {
-        guard !isRunning else { return }
+        guard !isRunning, daemonProcess == nil else { return }
+        let binary = daemonBinaryURL
+        guard FileManager.default.fileExists(atPath: binary.path) else { return }
 
-        let agentPlist = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/LaunchAgents/com.tessera.daemon.plist")
-        if FileManager.default.fileExists(atPath: agentPlist.path) {
-            _ = launchctl("bootstrap", ["gui/\(getuid())", agentPlist.path])
-            _ = launchctl("kickstart", ["gui/\(getuid())/com.tessera.daemon"])
-        } else {
-            let binary = appSupportDir.appendingPathComponent("TesseraDaemon")
-            if FileManager.default.fileExists(atPath: binary.path) {
-                let process = Process()
-                process.executableURL = binary
-                try? process.run()
-            }
+        let process = Process()
+        process.executableURL = binary
+
+        // Append to the shared daemon logs (create the folder on first run).
+        // O_APPEND keeps concurrent writers from clobbering each other's offsets.
+        let fm = FileManager.default
+        if !fm.fileExists(atPath: logsURL.path) {
+            try? fm.createDirectory(at: logsURL, withIntermediateDirectories: true)
+        }
+        let outFD = Darwin.open(logsURL.appendingPathComponent("daemon.log").path, O_WRONLY | O_APPEND | O_CREAT, 0o644)
+        if outFD >= 0 {
+            process.standardOutput = FileHandle(fileDescriptor: outFD, closeOnDealloc: true)
+        }
+        let errFD = Darwin.open(logsURL.appendingPathComponent("daemon.err.log").path, O_WRONLY | O_APPEND | O_CREAT, 0o644)
+        if errFD >= 0 {
+            process.standardError = FileHandle(fileDescriptor: errFD, closeOnDealloc: true)
+        }
+
+        process.terminationHandler = { [weak self, weak process] _ in
+            guard let self, let process, self.daemonProcess === process else { return }
+            self.daemonProcess = nil
+            self.onStatusChange?()
+        }
+
+        do {
+            try process.run()
+            daemonProcess = process
+            print("[menu] spawned daemon (pid \(process.processIdentifier))")
+        } catch {
+            print("[menu] failed to spawn daemon: \(error)")
+            return
         }
         onStatusChange?()
     }
@@ -126,14 +161,18 @@ final class DaemonControl: NSObject, @unchecked Sendable {
     }
 
     private func writeMenuAgentPlist() {
+        let appURL = appSupportDir.appendingPathComponent("Tessera.app")
         let plist: [String: Any] = [
             "Label": "com.tessera.menu",
-            "ProgramArguments": [appSupportDir.appendingPathComponent("TesseraMenu").path],
+            // Launch via LaunchServices so the bundle starts as a proper GUI app.
+            // (This does NOT unlock TCC — see scripts/auth_start.zsh — it just
+            // keeps the menu bar app running.)
+            "ProgramArguments": ["/usr/bin/open", "-n", appURL.path],
             "RunAtLoad": true,
             "KeepAlive": false,
             "ProcessType": "Interactive",
-            "StandardOutPath": logsURL.appendingPathComponent("menu.log").path,
-            "StandardErrorPath": logsURL.appendingPathComponent("menu.err.log").path,
+            "StandardOutPath": appSupportDir.appendingPathComponent("menu.log").path,
+            "StandardErrorPath": appSupportDir.appendingPathComponent("menu.err.log").path,
         ]
         let data = try? PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
         try? FileManager.default.createDirectory(at: logsURL, withIntermediateDirectories: true)
@@ -157,6 +196,16 @@ final class DaemonControl: NSObject, @unchecked Sendable {
             try? fm.createDirectory(at: logsURL, withIntermediateDirectories: true)
         }
         NSWorkspace.shared.open(logsURL)
+    }
+
+    func openAccessibilityPreferencePane() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    func openInputMonitoringPreferencePane() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_InputMonitoring") else { return }
+        NSWorkspace.shared.open(url)
     }
 
     // MARK: - launchctl

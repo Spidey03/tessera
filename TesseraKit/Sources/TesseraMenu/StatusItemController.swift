@@ -41,6 +41,21 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.addItem(startStopItem)
         menu.addItem(.separator())
 
+        let permItem = NSMenuItem(title: "Grant Permissions", action: nil, keyEquivalent: "")
+        let permMenu = NSMenu()
+        let permItems: [(String, Selector)] = [
+            ("Accessibility…", #selector(openAccessibilitySettings)),
+            ("Input Monitoring…", #selector(openInputMonitoringSettings)),
+        ]
+        for (title, action) in permItems {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+            item.target = self
+            permMenu.addItem(item)
+        }
+        permItem.submenu = permMenu
+        menu.addItem(permItem)
+        menu.addItem(.separator())
+
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.keyEquivalentModifierMask = [.command]
         settingsItem.target = self
@@ -124,6 +139,14 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     @objc private func openLogs() {
         control.openLogs()
+    }
+
+    @objc private func openAccessibilitySettings() {
+        control.openAccessibilityPreferencePane()
+    }
+
+    @objc private func openInputMonitoringSettings() {
+        control.openInputMonitoringPreferencePane()
     }
 
     @objc private func toggleStartAtLogin() {

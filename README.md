@@ -82,49 +82,42 @@ cd TesseraKit
 swift run TesseraDaemon
 ```
 
-> ⚠️ **Requirements**: The Swift daemon requires macOS **Accessibility** and **Input Monitoring** permissions. Grant them at:
+> ⚠️ **Requirements**: The Swift daemon needs macOS **Accessibility** and **Input Monitoring** permissions. On macOS 15+ (this is "26"), TCC *only* honors those grants for processes born under a **granted GUI app** — a launchd child (LaunchAgent/LaunchDaemon/Login item) is **always denied**, no matter which entries you add in System Settings. Local/ad-hoc signed binaries also can't satisfy it (they carry no Apple-issued `TeamIdentifier`).
+>
+> So: grant your **terminal**, and let the daemon ride that terminal's lineage:
 > ```
-> System Settings → Privacy & Security → Accessibility → Add Terminal
-> System Settings → Privacy & Security → Input Monitoring → Add Terminal
+> System Settings → Privacy & Security → Accessibility → add Terminal.app (and your terminal)
+> System Settings → Privacy & Security → Input Monitoring → add Terminal.app (and your terminal)
 > ```
+> Running `swift run TesseraDaemon` from your terminal — or `scripts/auth_start.zsh` (spawns it backgrounded via `nohup`, guarded by the PID file) — produces a daemon that can actually tile windows.
 
-**Auto-start on login (LaunchAgent)**
+**Auto-start on login (installed by `install_menu.sh`)**
 
-To run Tessera as a login agent that starts automatically (and stays up as a background daemon), use:
+The menu bar app is bundled as `Tessera.app` (`com.spidey.tessera`) and launched at login by the `com.tessera.menu` LaunchAgent via `/usr/bin/open` (LaunchServices, so it runs as a proper GUI app). The *tiling daemon* is started separately by the `com.tessera.tiling` LaunchAgent, which opens **Terminal** once (`/usr/bin/open -a Terminal scripts/auth_start.zsh`): the daemon is born as a descendant of the granted `Terminal.app` and therefore gets real Accessibility + Input Monitoring. A Terminal window briefly appears at login.
 
 ```bash
-# Install: build release, write the plist, and load the agent
-./scripts/install_daemon.sh
-
-# Remove: unload the agent, delete the plist and installed binary
-./scripts/uninstall_daemon.sh
-```
-
-This installs the release binary to `~/Library/Application Support/Tessera/TesseraDaemon`, writes a LaunchAgent plist (`com.tessera.daemon`), and loads it with `launchctl` so it starts on every login.
-
-Notes:
-- `KeepAlive` is off so the `⌘⌥⇧Q` quit hotkey isn't overridden by an immediate relaunch. Restart it any time with:
-  ```bash
-  launchctl kickstart -k "gui/$(id -u)/com.tessera.daemon"
-  ```
-- Logs go to `~/Library/Logs/Tessera/daemon.log` (stderr → `daemon.err.log`).
-- If Accessibility/Input Monitoring prompts appear after a reinstall (new binary path), grant them once.
-
-**Menu bar companion (optional)**
-
-A menu bar status item that shows whether the daemon is running and can drive it without the terminal: tile now, reload config, open the config file / log folder, start/stop the daemon, and toggle start-at-login. `Settings…` (`⌘,`) edits the common `config.json` keys (gaps, animation, focus, per-app tiling rules) and live-reloads the running daemon — keys the UI doesn't edit (hotkeys, `excludedSubroles`, `multiMonitor`) are preserved on save.
-
-```bash
-# Install: build release, write the plist, and load the agent
+# Install: build Tessera.app, write both LaunchAgent plists, load them
 ./scripts/install_menu.sh
 
-# Remove: unload the agent, delete the plist and installed binary
+# Remove: unload the agents, delete the plists and installed app
 ./scripts/uninstall_menu.sh
 ```
 
+Notes:
+- The daemon quit hotkey is honored (no `KeepAlive` relaunch). Restart it any time with:
+  ```bash
+  open -a Terminal "$HOME/Projects/tessera/scripts/auth_start.zsh"
+  ```
+- Logs go to `~/Library/Logs/Tessera/daemon.log` (stderr → `daemon.err.log`); menu/tiling agent output to `~/Library/Application Support/Tessera/menu.log` / `tiling.log`.
+- Grants are tied to your terminal app and survive reinstall (the daemon install path can change).
+
+**Menu bar companion (default)**
+
+A menu bar status item that shows whether the daemon is running and can drive it without the terminal: tile now, reload config, open the config file / log folder, start/stop the daemon, and toggle start-at-login. `Settings…` (`⌘,`) edits the common `config.json` keys (gaps, animation, focus, per-app tiling rules) and live-reloads the running daemon — keys the UI doesn't edit (hotkeys, `excludedSubroles`, `multiMonitor`) are preserved on save.
+
 - The menu app communicates with the daemon via a DistributedNotificationCenter channel (`TesseraDaemonCommand`) plus a PID file; no elevated permissions needed.
 - The status dot turns green when the daemon is running (gray when stopped).
-- `Start at Login` installs the `com.tessera.menu` agent (this menu app only — the daemon is managed separately by `install_daemon.sh`).
+- The menu auto-starts a daemon *only* when the menu itself runs under a granted parent (e.g. launched from a permissioned Terminal); otherwise the `com.tessera.tiling` agent handles it at login.
 
 **Homebrew (recommended)**
 

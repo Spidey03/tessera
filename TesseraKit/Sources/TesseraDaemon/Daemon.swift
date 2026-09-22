@@ -57,7 +57,7 @@ final class Daemon: @unchecked Sendable {
         print("AX trusted: \(AXIsProcessTrusted())")
         print()
 
-        checkPermissions()
+        _ = checkPermissions()
 
         if let tap = createEventTap(), CFMachPortIsValid(tap) {
             print("Event tap created successfully.")
@@ -571,6 +571,9 @@ final class Daemon: @unchecked Sendable {
             print("   Grant access: System Settings → Privacy & Security → Accessibility")
             print("   Add 'TesseraDaemon', or your Terminal, and enable the checkbox.")
             print()
+            // Pop the system prompt so the user can grant with a click.
+            let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+            _ = AXIsProcessTrustedWithOptions(options)
             ok = false
         }
 
@@ -595,6 +598,8 @@ final class Daemon: @unchecked Sendable {
             print("   Grant access: System Settings → Privacy & Security → Input Monitoring")
             print("   Add 'TesseraDaemon', or your Terminal, and enable the checkbox.")
             print()
+            // Ask macOS to add us to the Input Monitoring allow list (one-click prompt).
+            CGRequestListenEventAccess()
             ok = false
         }
 

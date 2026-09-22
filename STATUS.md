@@ -33,7 +33,9 @@
 ### Menu bar companion (TesseraMenu)
 - **DistributedNotificationCenter IPC**: daemon listens on `TesseraDaemonCommand` (tile, focus*, remove, fullscreen, toggleSplit, reload, quit); posts `TesseraDaemonDidStart`/`DidQuit` and writes a PID file so the menu app detects liveness even if it launched after the daemon
 - **Centralized dispatch**: hotkeys and IPC commands both funnel through `Daemon.handleAction(_:)`; `Daemon.reloadConfig()` swaps tiler/config/bindings live then re-tiles
-- **NSStatusItem app** (`TesseraMenu`): SF-Symbol tile icon, green (running) / gray (stopped) dot, "Start at Login" toggle managing a `com.tessera.menu` LaunchAgent; start/stop daemon, tile now, reload config, open config file / logs folder
+- **NSStatusItem app** (`TesseraMenu`): SF-Symbol tile icon, green (running) / gray (stopped) dot, "Start at Login" toggle managing the `com.tessera.menu` LaunchAgent; start/stop daemon, tile now, reload config, open config file / logs folder
+- **App bundle**: menu packaged as `Tessera.app` (`com.spidey.tessera`, LSUIElement), launched at login via `/usr/bin/open` so it runs as a real LaunchServices GUI app
+- **Granted-lineage startup (macOS 26)**: TCC denies Accessibility/Input Monitoring to launchd descendants and to any locally/ad-hoc signed binary (no Apple `TeamIdentifier`). The `com.tessera.tiling` LaunchAgent opens Terminal once (`/usr/bin/open -a Terminal scripts/auth_start.zsh`) — the daemon spawns as a descendant of the *granted* Terminal, giving real event taps + tiling at login. Grants belong to your terminal app, not "Tessera". The menu auto-starts a daemon only when it itself runs under a granted parent.
 - **Settings window** (`⌘,` or menu): edits `config.json` gaps, animation steps/duration, new-window-focus and per-app tiling rules; merges into the existing file (hotkeys, `excludedSubroles`, `multiMonitor` are preserved) and live-reloads the daemon over IPC
 - **Graceful shutdown**: SIGTERM (launchctl stop) handler posts `DidQuit` and removes the PID file
 
@@ -48,7 +50,7 @@
 - [x] Split direction toggle (`⌘⌥Space`)
 - [x] Per-app tiling rules (normal, ignore, float, sticky)
 - [x] `sticky` app rule (window keeps its tile slot across re-tiles)
-- [x] launchd agent integration (auto-start on login)
+- [x] launchd agent integration (auto-start on login) — menu via `com.tessera.menu`; tiling daemon via granted-termininal lineage (`com.tessera.tiling` → `auth_start.zsh`)
 - [x] Window role/subrole filtering refinements (config-overridable `excludedSubroles`)
 
 ### Phase 4 — Polish & packaging
