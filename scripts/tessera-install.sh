@@ -36,8 +36,8 @@ Usage:
   tessera-install --check                 verify the running install
   tessera-install -h, --help              show this help
 
-Locates Tessera.app (--app, then ~/Library/Application Support/Tessera, then
-the Homebrew Cellar), copies it into place, writes both LaunchAgent plists
+Locates Tessera.app (--app, then the Homebrew Cellar, then an existing App
+Support install), copies it into place, writes both LaunchAgent plists
 (com.tessera.menu, com.tessera.tiling), loads them, and prints the one-time
 Accessibility/Input Monitoring grant steps for your terminal.
 EOF
@@ -58,10 +58,12 @@ done
 
 resolve_app() {
     local candidate
+    # Prefer an explicitly-passed bundle, then the Homebrew Cellar artifact,
+    # then an existing App Support install (repo dev flow).
     for candidate in \
         "$APP" \
-        "$BIN_DIR/Tessera.app" \
-        "$(command -v brew >/dev/null && brew --prefix tessera 2>/dev/null || true)/libexec/Tessera.app"
+        "$(command -v brew >/dev/null && brew --prefix tessera 2>/dev/null || true)/libexec/Tessera.app" \
+        "$BIN_DIR/Tessera.app"
     do
         [ -n "$candidate" ] || continue
         [ -x "$candidate/Contents/MacOS/TesseraMenu" ] || continue
@@ -129,8 +131,13 @@ install() {
     echo "==> Installing app bundle + launcher to $BIN_DIR"
     mkdir -p "$BIN_DIR"
     [ ! -x "$script_src" ] && { echo "error: $script_src missing" >&2; exit 1; }
-    rm -rf "$BIN_DIR/Tessera.app"
-    cp -R "$APP" "$BIN_DIR/Tessera.app"
+    if [ "$APP" = "$BIN_DIR/Tessera.app" ]; then
+        echo "   (app already in place — reusing $APP)"
+    else
+        rm -rf "$BIN_DIR/Tessera.app"
+        cp -R "$APP" "$BIN_DIR/Tessera.app"
+        echo "   (copied $APP)"
+    fi
     chmod +x "$BIN_DIR/Tessera.app/Contents/MacOS/TesseraMenu" \
              "$BIN_DIR/Tessera.app/Contents/MacOS/TesseraDaemon"
     cp "$script_src" "$BIN_DIR/auth_start.zsh"

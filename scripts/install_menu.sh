@@ -14,4 +14,4 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 echo "==> Building Tessera.app"
 "$ROOT_DIR/scripts/build_app.sh"
 
-exec "$ROOT_DIR/scripts/tessera-install.sh"
+exec "$ROOT_DIR/scripts/tessera-install.sh" --app "$HOME/Library/Application Support/Tessera/Tessera.app"
