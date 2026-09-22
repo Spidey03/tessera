@@ -165,12 +165,17 @@ brew install --build-from-source /tmp/Tessera.rb
 **Release ritual** (when cutting a new version):
 
 1. Bump `version` in `TesseraKit/Sources/TesseraDaemon/main.swift`, `scripts/build_app.sh`, and `Formula/tessera.rb`; commit and push.
-2. Tag and push: `git tag v0.4.0 && git push origin v0.4.0`
-3. Fill the formula's `sha256`:
+2. Tag and push: `git tag v0.4.1 && git push origin v0.4.1`
+3. Upload the archive as an immutable **release asset** and pin the formula to it
+   (tag-recreated tarballs are served stale by GitHub's cache, so releases use
+   asset URLs — deterministic and byte-verified):
    ```bash
-   curl -Ls https://github.com/Spidey03/tessera/archive/refs/tags/v0.4.0.tar.gz | shasum -a 256
+   git archive --format=tar.gz -o /tmp/tessera-v$VERSION.tar.gz HEAD
+   gh release create v$VERSION /tmp/tessera-v$VERSION.tar.gz --title "Tessera v$VERSION"
+   curl -Ls https://github.com/Spidey03/tessera/releases/download/v$VERSION/tessera-v$VERSION.tar.gz | shasum -a 256
    ```
-4. Reinstall via the tap to confirm the released artifact.
+4. Set that `sha256` in `Formula/tessera.rb` (keep the release-asset `url`), commit, push.
+5. Reinstall via the tap to confirm the released artifact builds and runs.
 
 ### Hotkeys
 
