@@ -15,8 +15,11 @@
 #     Contents/Resources/auth_start.zsh  daemon launcher for the tiling agent
 #
 # Usage: scripts/build_app.sh
-#   TESSERA_DEST=<path>   override where the .app bundle is written (used by the
-#                         Homebrew formula to stage into the Cellar)
+#   TESSERA_DEST=<path>       override where the .app bundle is written (used by
+#                             the Homebrew formula to stage into the Cellar)
+#   SWIFT_BUILD_FLAGS="..."   extra flags for `swift build` (the Homebrew
+#                             formula passes --disable-sandbox, since SwiftPM's
+#                             nested manifest sandbox breaks under brew's)
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -30,7 +33,7 @@ MACOS="$CONTENTS/MacOS"
 RESOURCES="$CONTENTS/Resources"
 
 echo "==> Building release binaries…"
-(cd "$ROOT_DIR/TesseraKit" && swift build -c release)
+(cd "$ROOT_DIR/TesseraKit" && swift build -c release ${SWIFT_BUILD_FLAGS:-})
 
 echo "==> Assembling $APP_NAME.app"
 rm -rf "$DEST"

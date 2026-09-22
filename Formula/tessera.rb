@@ -13,7 +13,10 @@ class Tessera < Formula
   # once to wire up the login items.
   def install
     # Build release binaries and assemble Tessera.app into the staging dir.
+    # --disable-sandbox: without it SwiftPM's nested manifest sandbox fails
+    # inside Homebrew's build sandbox (sandbox-exec: Operation not permitted).
     ENV["TESSERA_DEST"] = "#{buildpath}/Tessera.app"
+    ENV["SWIFT_BUILD_FLAGS"] = "--disable-sandbox"
     system "./scripts/build_app.sh"
 
     libexec.install "Tessera.app"
