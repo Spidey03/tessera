@@ -41,7 +41,7 @@
 - **Graceful shutdown**: SIGTERM (launchctl stop) handler posts `DidQuit` and removes the PID file
 
 ### Testing
-- 67 Swift tests (TesseraTests): BSP tree ops, spatial focus, split toggle, keybinding matching, ScreenManager rect/wallpaper logic, slot-preserving order, subrole filtering
+- 77 Swift tests (TesseraTests): BSP tree ops, spatial focus, split toggle, layout presets, keybinding matching, ScreenManager rect/wallpaper logic, slot-preserving order, subrole filtering
 - 27 Python prototype tests (`tests/test_workspace.py`)
 
 ## What's Left
@@ -55,6 +55,7 @@
 - [x] Window role/subrole filtering refinements (config-overridable `excludedSubroles`)
 
 ### Phase 4 — Polish & packaging
-- [x] Homebrew formula (tag-based, MIT, verified via local `brew install --build-from-source`)
+- [x] Homebrew formula (tag-based `v0.4.0`, MIT, verified via local `brew install --build-from-source`; installs `Tessera.app` + `tessera`/`tessera-install`/`tessera-uninstall`)
+- [x] Shared install wiring: `scripts/tessera-install.sh` / `scripts/tessera-uninstall.sh` (used by both the repo scripts and the Homebrew formula) incl. `--check` health verification
 - [x] Menu bar app (`TesseraMenu` — status dot, tile/reload/start-stop, start-at-login)
 - [x] Configuration UI (in-app settings: gaps, animation, focus, per-app rules; saves `config.json` preserving unedited keys and live-reloads via IPC)

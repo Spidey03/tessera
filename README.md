@@ -91,13 +91,16 @@ swift run TesseraDaemon
 > ```
 > Running `swift run TesseraDaemon` from your terminal — or `scripts/auth_start.zsh` (spawns it backgrounded via `nohup`, guarded by the PID file) — produces a daemon that can actually tile windows.
 
-**Auto-start on login (installed by `install_menu.sh`)**
+**Auto-start on login (installed by `scripts/install_menu.sh` / `tessera-install`)**
 
-The menu bar app is bundled as `Tessera.app` (`com.spidey.tessera`) and launched at login by the `com.tessera.menu` LaunchAgent via `/usr/bin/open` (LaunchServices, so it runs as a proper GUI app). The *tiling daemon* is started separately by the `com.tessera.tiling` LaunchAgent, which opens **Terminal** once (`/usr/bin/open -a Terminal <app support>/auth_start.zsh`): the daemon is born as a descendant of the granted `Terminal.app` and therefore gets real Accessibility + Input Monitoring. A Terminal window briefly appears at login. The menu's **Start at Login** toggle installs/removes *both* agents together (the script is bundled in the app, so it works independently of the repo location).
+The menu bar app is bundled as `Tessera.app` (`com.spidey.tessera`) and launched at login by the `com.tessera.menu` LaunchAgent via `/usr/bin/open` (LaunchServices, so it runs as a proper GUI app). The *tiling daemon* is started separately by the `com.tessera.tiling` LaunchAgent, which opens **Terminal** once (`/usr/bin/open -a Terminal <app support>/auth_start.zsh`): the daemon is born as a descendant of the granted `Terminal.app` and therefore gets real Accessibility + Input Monitoring. A Terminal window briefly appears at login. The menu's **Start at Login** toggle installs/removes *both* agents together (the script is bundled in the app, so it works independently of the repo location). All wiring lives in one shared script, `scripts/tessera-install.sh` (used both by the repo and by Homebrew).
 
 ```bash
 # Install: build Tessera.app, write both LaunchAgent plists, load them
 ./scripts/install_menu.sh
+
+# Verify the running install (daemon, menu, both agents, grants)
+./scripts/tessera-install.sh --check
 
 # Remove: unload both agents, stop daemon/menu, delete app + logs
 # (keeps ~/.config/tessera unless you pass --purge)
@@ -121,39 +124,53 @@ A menu bar status item that shows whether the daemon is running and can drive it
 - The status dot turns green when the daemon is running (gray when stopped).
 - The menu auto-starts a daemon *only* when the menu itself runs under a granted parent (e.g. launched from a permissioned Terminal); otherwise the `com.tessera.tiling` agent handles it at login.
 
-**Homebrew (recommended)**
+**Homebrew (recommended for developers)**
 
 ```bash
-# Tap the formula
-brew tap Spidey03/tessera
-
-# Build & install (requires a GitHub release tagged v0.4.0 — see Release Ritual below)
+# Tap this repository as a formula tap, then install
+brew tap Spidey03/tessera https://github.com/Spidey03/tessera
 brew install Spidey03/tessera/tessera
 ```
 
-To test locally without a GitHub release, build from a local formula:
+The formula builds a release `Tessera.app` (menu bar app + daemon + launcher) and installs three commands:
+
+- `tessera` — the tiling daemon binary (`tessera --version`)
+- `tessera-install` — wires up the login items (LaunchAgents) + prints the one-time grant steps
+- `tessera-uninstall` — removes everything (keeps `~/.config/tessera` unless `--purge`)
+
+After installing, run:
+
+```bash
+tessera-install            # login items + grant instructions
+tessera-install --check    # verify daemon, menu, agents, grants
+```
+
+> ⚠️ **Do NOT use `brew services start tessera`.** macOS 15+ refuses
+> Accessibility/Input Monitoring to launchd-spawned processes, so the daemon
+> must be launched through a granted terminal (which `tessera-install` sets up).
+>
+> The first time, grant your terminal under
+> System Settings → Privacy & Security → **Accessibility** and **Input Monitoring**.
+> The daemon inherits those grants; a Terminal window briefly opens at login.
+
+**Building the formula from a local checkout** (contributors, no GitHub release needed):
 
 ```bash
 git archive --format=tar.gz -o /tmp/tessera-0.4.0.tar.gz HEAD
-# Edit Formula/tessera.rb to point at file:///tmp/tessera-0.4.0.tar.gz + fill sha256
-brew install --build-from-source Spidey03/tessera/tessera
-brew test Spidey03/tessera/tessera
+# Create /tmp/Tessera.rb from Formula/tessera.rb, pointing `url` at
+# file:///tmp/tessera-0.4.0.tar.gz and setting `sha256 "$(shasum -a 256 /tmp/tessera-0.4.0.tar.gz)"`.
+brew install --build-from-source /tmp/Tessera.rb
 ```
 
-**Release Ritual**
+**Release ritual** (when cutting a new version):
 
-1. Tag a release and push:
-   ```bash
-   git tag v0.4.0 && git push origin v0.4.0
-   ```
-2. Fill the formula's `sha256`:
+1. Bump `version` in `TesseraKit/Sources/TesseraDaemon/main.swift`, `scripts/build_app.sh`, and `Formula/tessera.rb`; commit and push.
+2. Tag and push: `git tag v0.4.0 && git push origin v0.4.0`
+3. Fill the formula's `sha256`:
    ```bash
    curl -Ls https://github.com/Spidey03/tessera/archive/refs/tags/v0.4.0.tar.gz | shasum -a 256
    ```
-3. Install:
-   ```bash
-   brew install Spidey03/tessera/tessera
-   ```
+4. Reinstall via the tap to confirm the released artifact.
 
 ### Hotkeys
 
@@ -226,7 +243,7 @@ tessera/
 │       ├── TesseraSystem/      # macOS AX layer
 │       ├── TesseraDaemon/      # Orchestrator + event loop
 │       ├── TesseraMenu/        # Menu bar status/control app
-│       ├── TesseraTests/       # 67 Swift tests
+│       ├── TesseraTests/       # 77 Swift tests
 │       └── WindowDiscover/     # AX enumeration CLI
 └── README.md
 ```

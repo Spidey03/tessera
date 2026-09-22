@@ -15,6 +15,8 @@
 #     Contents/Resources/auth_start.zsh  daemon launcher for the tiling agent
 #
 # Usage: scripts/build_app.sh
+#   TESSERA_DEST=<path>   override where the .app bundle is written (used by the
+#                         Homebrew formula to stage into the Cellar)
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -22,7 +24,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_NAME="Tessera"
 VERSION="0.4.0"
 BIN_DIR="$HOME/Library/Application Support/Tessera"
-DEST="$BIN_DIR/$APP_NAME.app"
+DEST="${TESSERA_DEST:-$BIN_DIR/$APP_NAME.app}"
 CONTENTS="$DEST/Contents"
 MACOS="$CONTENTS/MacOS"
 RESOURCES="$CONTENTS/Resources"
