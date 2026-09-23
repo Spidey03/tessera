@@ -93,7 +93,12 @@ swift run TesseraDaemon
 
 **Auto-start on login (installed by `scripts/install_menu.sh` / `tessera-install`)**
 
-The menu bar app is bundled as `Tessera.app` (`com.spidey.tessera`) and launched at login by the `com.tessera.menu` LaunchAgent via `/usr/bin/open` (LaunchServices, so it runs as a proper GUI app). The *tiling daemon* is started separately by the `com.tessera.tiling` LaunchAgent, which opens **Terminal** once (`/usr/bin/open -a Terminal <app support>/auth_start.zsh`): the daemon is born as a descendant of the granted `Terminal.app` and therefore gets real Accessibility + Input Monitoring. A Terminal window briefly appears at login. The menu's **Start at Login** toggle installs/removes *both* agents together (the script is bundled in the app, so it works independently of the repo location). All wiring lives in one shared script, `scripts/tessera-install.sh` (used both by the repo and by Homebrew).
+The menu bar app is bundled as `Tessera.app` (`com.spidey.tessera`) and launched at login by the `com.tessera.menu` LaunchAgent via `/usr/bin/open` (LaunchServices, so it runs as a proper GUI app). The *tiling daemon* is started by the `com.tessera.tiling` LaunchAgent, whose launch style depends on how the bundle is signed (see `tessera-install.sh`):
+
+- **Developer ID signed** → launchd runs `TesseraDaemon` directly. The Apple-issued `TeamIdentifier` is what macOS TCC honors, so grants apply to Tessera itself and login is **silent** — no Terminal window (#13).
+- **unsigned/ad-hoc (currently)** → opens Terminal backgrounded (`/usr/bin/open -gj -a Terminal <app support>/auth_start.zsh`): the daemon is born as a descendant of the granted `Terminal.app` and therefore gets real Accessibility + Input Monitoring, at the cost of a briefly-appearing Terminal window at login.
+
+The menu's **Start at Login** toggle installs/removes *both* agents together (the script is bundled in the app, so it works independently of the repo location). All wiring lives in one shared script, `scripts/tessera-install.sh` (used both by the repo and by Homebrew). `tessera-install --check` reports which launch style is active.
 
 ```bash
 # Install: build Tessera.app, write both LaunchAgent plists, load them
@@ -152,6 +157,29 @@ tessera-install --check    # verify daemon, menu, agents, grants
 > The first time, grant your terminal under
 > System Settings → Privacy & Security → **Accessibility** and **Input Monitoring**.
 > The daemon inherits those grants; a Terminal window briefly opens at login.
+
+**Homebrew Cask / DMG (unsigned builds)**
+
+```bash
+brew install --cask Spidey03/tessera/tessera
+```
+
+Installs `Tessera.app` into `/Applications` from the released DMG. The current
+release is **unsigned and ad-hoc signed**, so the first launch is blocked by
+Gatekeeper — right-click the app once and choose **Open** (or pass
+`brew install --cask --no-quarantine Spidey03/tessera/tessera`). After that,
+wire up the login items the same way as the formula:
+
+```bash
+tessera-install --app /Applications/Tessera.app
+tessera-install --check
+```
+
+The formula and the cask both point at the same released app, so installs are
+interchangeable — use whichever you prefer. A fully **signed, notarized** DMG
+(no right-click step, one-click grant for `Tessera` itself) is the next release
+priority (#20); the pipeline in `scripts/build_release.sh` already produces it
+once Apple credentials are configured.
 
 **Building the formula from a local checkout** (contributors, no GitHub release needed):
 
