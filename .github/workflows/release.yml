@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build + attach release artifacts
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build DMG (+ sign/notarize when credentials present)
+        env:
+          TESSERA_SIGN_IDENTITY: ${{ secrets.TESSERA_SIGN_IDENTITY }}
+          TESSERA_NOTARY_KEY_ID: ${{ secrets.TESSERA_NOTARY_KEY_ID }}
+          TESSERA_NOTARY_KEY: ${{ secrets.TESSERA_NOTARY_KEY }}
+          TESSERA_NOTARY_ISSUER: ${{ secrets.TESSERA_NOTARY_ISSUER }}
+        run: scripts/build_release.sh
+
+      - name: Build source tarball (git archive)
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          git archive --format=tar.gz -o "dist/tessera-${VERSION}.tar.gz" "v${VERSION}"
+
+      - name: Upload artifacts to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          gh release view "${TAG}" >/dev/null 2>&1 || \
+            gh release create "${TAG}" --title "Tessera ${TAG#v}" --notes "Automated release build (see build_release.sh for signing status)."
+          gh release upload "${TAG}" dist/* --clobber
+          echo "--- uploaded ---"
+          gh release view "${TAG}" --json assets -q '.assets[].name'
