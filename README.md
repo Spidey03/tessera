@@ -166,9 +166,8 @@ brew install --cask Spidey03/tessera/tessera
 
 Installs `Tessera.app` into `/Applications` from the released DMG. The current
 release is **unsigned and ad-hoc signed**, so the first launch is blocked by
-Gatekeeper — right-click the app once and choose **Open** (or pass
-`brew install --cask --no-quarantine Spidey03/tessera/tessera`). After that,
-wire up the login items the same way as the formula:
+Gatekeeper — right-click the app once and choose **Open**. After that, wire up
+the login items the same way as the formula:
 
 ```bash
 tessera-install --app /Applications/Tessera.app
