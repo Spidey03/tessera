@@ -4,11 +4,6 @@ import TesseraKit
 
 // MARK: - Config file models
 
-struct HotkeyConfig: Codable {
-    var keyCode: UInt16
-    var flags: [String]
-}
-
 struct MultiMonitorConfigFile: Codable {
     var focusMode: String?
 }
@@ -29,7 +24,7 @@ struct TesseraConfigFile: Codable {
     var multiMonitor: MultiMonitorConfigFile?
     var appRules: [String: AppTilingRule]?
     var excludedSubroles: [String]?
-    var hotkeys: [String: HotkeyConfig]?
+    var hotkeys: [String: HotkeySpec]?
 }
 
 // MARK: - Loaded config
@@ -191,22 +186,12 @@ enum ConfigLoader {
     }
 
     static func defaultBindings() -> [KeyBinding] {
-        [
-            KeyBinding(keyCode: 36, flags: [.maskCommand, .maskAlternate], action: "tile"),
-            KeyBinding(keyCode: 4, flags: [.maskCommand, .maskAlternate], action: "focusLeft"),
-            KeyBinding(keyCode: 37, flags: [.maskCommand, .maskAlternate], action: "focusRight"),
-            KeyBinding(keyCode: 40, flags: [.maskCommand, .maskAlternate], action: "focusLeft"),
-            KeyBinding(keyCode: 38, flags: [.maskCommand, .maskAlternate], action: "focusRight"),
-            KeyBinding(keyCode: 13, flags: [.maskCommand, .maskAlternate], action: "remove"),
-            KeyBinding(keyCode: 34, flags: [.maskCommand, .maskAlternate], action: "focusUp"),      // I
-            KeyBinding(keyCode: 46, flags: [.maskCommand, .maskAlternate], action: "focusDown"),    // M
-            KeyBinding(keyCode: 3, flags: [.maskCommand, .maskAlternate], action: "fullscreen"),
-            KeyBinding(keyCode: 49, flags: [.maskCommand, .maskAlternate], action: "toggleSplit"), // Space
-            KeyBinding(keyCode: 33, flags: [.maskCommand, .maskAlternate], action: "resizeShrink"), // [
-            KeyBinding(keyCode: 30, flags: [.maskCommand, .maskAlternate], action: "resizeGrow"),   // ]
-            KeyBinding(keyCode: 47, flags: [.maskCommand, .maskAlternate], action: "cycleLayout"), // Period: bsp→master→columns
-            KeyBinding(keyCode: 12, flags: [.maskCommand, .maskAlternate, .maskShift], action: "quit"),
-        ]
+        HotkeyBindings.defaults.map { loadBinding(from: $0) }
+    }
+
+    /// Resolve a shared hotkey binding to the daemon's CGEvent-matching form.
+    private static func loadBinding(from binding: HotkeyBinding) -> KeyBinding {
+        KeyBinding(keyCode: binding.keyCode, flags: parseFlags(binding.flags), action: binding.action)
     }
 
     private static func parseFlags(_ strings: [String]) -> CGEventFlags {
@@ -225,15 +210,8 @@ enum ConfigLoader {
         return flags
     }
 
-    private static func mergeBindings(_ hotkeys: [String: HotkeyConfig]?) -> [KeyBinding] {
-        guard let hotkeys = hotkeys, !hotkeys.isEmpty else { return defaultBindings() }
-        var result = defaultBindings()
-        for (actionName, hotkey) in hotkeys {
-            let flags = parseFlags(hotkey.flags)
-            let binding = KeyBinding(keyCode: hotkey.keyCode, flags: flags, action: actionName)
-            result.removeAll { $0.keyCode == hotkey.keyCode }
-            result.append(binding)
-        }
-        return result
+    private static func mergeBindings(_ hotkeys: [String: HotkeySpec]?) -> [KeyBinding] {
+        HotkeyBindings.merge(defaults: HotkeyBindings.defaults, overrides: hotkeys)
+            .map { loadBinding(from: $0) }
     }
 }

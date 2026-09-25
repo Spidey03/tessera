@@ -93,6 +93,40 @@ final class ConfigSettings {
         }
     }
 
+    /// User-remapped hotkeys keyed by action name (config `"hotkeys"`).
+    /// Reads tolerate malformed/partial entries (a bad row is skipped); an
+    /// action with no override falls back to `HotkeyBindings.defaults`.
+    var hotkeys: [String: HotkeySpec] {
+        get {
+            guard let raw = dict["hotkeys"] as? [String: [String: Any]] else { return [:] }
+            var result: [String: HotkeySpec] = [:]
+            for (action, entry) in raw {
+                guard let keyCode = entry["keyCode"] as? NSNumber,
+                      let flags = entry["flags"] as? [String] else { continue }
+                result[action] = HotkeySpec(keyCode: keyCode.uint16Value, flags: flags)
+            }
+            return result
+        }
+        set {
+            if newValue.isEmpty {
+                dict.removeValue(forKey: "hotkeys")
+                return
+            }
+            var raw: [String: [String: Any]] = [:]
+            for (action, spec) in newValue where !action.isEmpty {
+                raw[action] = [
+                    "keyCode": Int(spec.keyCode),
+                    "flags": HotkeyBindings.normalizedFlags(spec.flags),
+                ]
+            }
+            if raw.isEmpty {
+                dict.removeValue(forKey: "hotkeys")
+            } else {
+                dict["hotkeys"] = raw
+            }
+        }
+    }
+
     @discardableResult
     func save() -> Bool {
         do {

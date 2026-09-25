@@ -218,6 +218,8 @@ brew install --build-from-source /tmp/Tessera.rb
 | `⌘⌥.` | Cycle layout on the focused display: bsp → master-stack → columns |
 | `⌘⌥⇧Q` | Quit daemon |
 
+All hotkeys are remappable. The **Settings** window (menu bar icon → Settings, or `⌘,`) has a **Hotkeys** list: click a combo and press the new keys to change it, or Reset to restore the default. The same overrides live under `"hotkeys"` in `~/.config/tessera/config.json` (`{action: {keyCode, flags}}`). Overriding an action adds its combo and frees that key from whoever else used it; existing aliases of the same action (e.g. `focusLeft` answering to both ⌘⌥H and ⌘⌥K) stay active unless their key is claimed. Changes take effect on Save (daemon reloads live).
+
 ### Layout Behavior
 
 - **Layout presets** (`layoutMode` in `~/.config/tessera/config.json`, default `bsp`):

@@ -39,11 +39,11 @@
 - **NSStatusItem app** (`TesseraMenu`): SF-Symbol tile icon, green (running) / gray (stopped) dot, "Start at Login" toggle managing the `com.tessera.menu` and `com.tessera.tiling` LaunchAgents together; start/stop daemon, tile now, reload config, open config file / logs folder
 - **App bundle**: menu packaged as `Tessera.app` (`com.spidey.tessera`, LSUIElement), launched at login via `/usr/bin/open` so it runs as a real LaunchServices GUI app
 - **Granted-lineage startup (macOS 26)**: TCC denies Accessibility/Input Monitoring to launchd descendants and to any locally/ad-hoc signed binary (no Apple `TeamIdentifier`). The `com.tessera.tiling` LaunchAgent opens Terminal once (`/usr/bin/open -a Terminal <app support>/auth_start.zsh`) — the daemon spawns as a descendant of the *granted* Terminal, giving real event taps + tiling at login. Grants belong to your terminal app, not "Tessera". The menu auto-starts a daemon only when it itself runs under a granted parent.
-- **Settings window** (`⌘,` or menu): edits `config.json` gaps, animation steps/duration, new-window-focus and per-app tiling rules; merges into the existing file (hotkeys, `excludedSubroles`, `multiMonitor` are preserved) and live-reloads the daemon over IPC
+- **Settings window** (`⌘,` or menu): edits `config.json` gaps, animation steps/duration, new-window-focus, per-app tiling rules **and hotkeys** (click a combo, press the new keys, Reset restores the default); merges into the existing file (unedited keys preserved) and live-reloads the daemon over IPC. Hotkey overrides share the daemon's `HotkeyBindings` model (aliases persist, a claimed key is freed from its previous holder) — new `HotkeySpec`/`HotkeyBinding` in TesseraKit cover the merge/normalize/display logic.
 - **Graceful shutdown**: SIGTERM (launchctl stop) handler posts `DidQuit` and removes the PID file
 
 ### Testing
-- 95 Swift tests (TesseraTests): BSP tree ops, spatial focus, split toggle, split-state capture/apply (ratio + orientation, surviving-pair stability, restart faithfulness), layout presets, keybinding matching, ScreenManager rect/wallpaper logic, slot-preserving order, subrole filtering, LayoutState round-trip/legacy decode, float-rect persistence
+- 105 Swift tests (TesseraTests): BSP tree ops, spatial focus, split toggle, split-state capture/apply (ratio + orientation, surviving-pair stability, restart faithfulness), layout presets, hotkey model (defaults, flag normalization, override merge/freeing, combo display), keybinding matching, ScreenManager rect/wallpaper logic, slot-preserving order, subrole filtering, LayoutState round-trip/legacy decode, float-rect persistence
 - 27 Python prototype tests (`tests/test_workspace.py`)
 
 ## What's Left
