@@ -575,6 +575,90 @@ func testToggleSplitPreservesGapInset() throws {
     }
 }
 
+// MARK: - Resize split (weights)
+
+func testResizeSplitSingleWindowReturnsFalse() throws {
+    let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    ws.addWindow(Window(id: "A"))
+    try assertEqual(ws.resizeSplit(delta: 0.10), false)
+    try assertEqual(ws.getLayout().count, 1)
+}
+
+func testResizeSplitGrowsFocusedRightChild() throws {
+    let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    ws.addWindow(Window(id: "A"))
+    ws.addWindow(Window(id: "B"))
+    ws.focusWindow(id: "B")
+    // Positive delta grows the FOCUSED side (B, the right child) → A's share 0.6→0.4
+    ws.resizeSplit(delta: 0.10)
+    let layout = ws.getLayout()
+    let aRect = layout.first { $0.0.id == "A" }!.1
+    let bRect = layout.first { $0.0.id == "B" }!.1
+    try assertEqual(Int(aRect.width.rounded()), 757) // 1912*0.4 - 8
+    try assertEqual(Int(bRect.width.rounded()), 1139) // 1912*0.6 - 8
+    try assertLessThan(aRect.width, bRect.width)
+}
+
+func testResizeSplitShrinksFocusedRightChild() throws {
+    let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    ws.addWindow(Window(id: "A"))
+    ws.addWindow(Window(id: "B"))
+    ws.focusWindow(id: "B")
+    ws.resizeSplit(delta: -0.10)
+    let layout = ws.getLayout()
+    let aRect = layout.first { $0.0.id == "A" }!.1
+    let bRect = layout.first { $0.0.id == "B" }!.1
+    try assertEqual(Int(aRect.width.rounded()), 1139) // A took 0.6
+    try assertEqual(Int(bRect.width.rounded()), 757)
+    try assertLessThan(bRect.width, aRect.width)
+}
+
+func testResizeSplitRoundTripRestoresEqualSplit() throws {
+    let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    ws.addWindow(Window(id: "A"))
+    ws.addWindow(Window(id: "B"))
+    ws.focusWindow(id: "B")
+    ws.resizeSplit(delta: 0.10)
+    ws.resizeSplit(delta: -0.10)
+    let layout = ws.getLayout()
+    let aRect = layout.first { $0.0.id == "A" }!.1
+    let bRect = layout.first { $0.0.id == "B" }!.1
+    try assertEqual(aRect.width, bRect.width)
+    try assertEqual(Int(aRect.width.rounded()), 948)
+}
+
+func testResizeSplitClampsToMinMax() throws {
+    let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    ws.addWindow(Window(id: "A"))
+    ws.addWindow(Window(id: "B"))
+    ws.focusWindow(id: "A")
+    // Focus is on A (left child). Grow A hard → clamps at splitMaxRatio 0.8.
+    for _ in 0..<10 { ws.resizeSplit(delta: 0.10) }
+    var layout = ws.getLayout()
+    var aRect = layout.first { $0.0.id == "A" }!.1
+    try assertEqual(Int(aRect.width.rounded()), 1522) // 1912*0.8 - 8
+    // Shrink A hard → clamps at splitMinRatio 0.2.
+    for _ in 0..<10 { ws.resizeSplit(delta: -0.10) }
+    layout = ws.getLayout()
+    aRect = layout.first { $0.0.id == "A" }!.1
+    try assertEqual(Int(aRect.width.rounded()), 374) // 1912*0.2 - 8
+}
+
+func testResizeSplitRatioSurvivesToggleDirection() throws {
+    let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    ws.addWindow(Window(id: "A"))
+    ws.addWindow(Window(id: "B"))
+    ws.focusWindow(id: "B")
+    ws.resizeSplit(delta: 0.10) // ratio → 0.4 (A side)
+    ws.toggleSplitDirection()   // vertical → horizontal, ratio kept
+    let layout = ws.getLayout()
+    let aRect = layout.first { $0.0.id == "A" }!.1
+    let bRect = layout.first { $0.0.id == "B" }!.1
+    // A now holds 40% of the height (was the left child, still first child).
+    try assertEqual(Int(aRect.height.rounded()), 421) // 1072*0.4 - 8
+    try assertEqual(Int(bRect.height.rounded()), 635) // 1072*0.6 - 8
+}
+
 // MARK: - WindowOrdering (slot preservation)
 
 func testWindowOrderingPreservesPreviousOrder() throws {
@@ -931,6 +1015,13 @@ let tests: [(String, () throws -> Void)] = [
     ("Toggle split single window returns false", testToggleSplitSingleWindowReturnsFalse),
     ("Toggle split nested only affects focused split", testToggleSplitNestedOnlyAffectsFocusedSplit),
     ("Toggle split preserves gap inset", testToggleSplitPreservesGapInset),
+    // Resize split
+    ("Resize split single window returns false", testResizeSplitSingleWindowReturnsFalse),
+    ("Resize split grows focused right child", testResizeSplitGrowsFocusedRightChild),
+    ("Resize split shrinks focused right child", testResizeSplitShrinksFocusedRightChild),
+    ("Resize split round trip restores equal split", testResizeSplitRoundTripRestoresEqualSplit),
+    ("Resize split clamps to min/max", testResizeSplitClampsToMinMax),
+    ("Resize split ratio survives toggle direction", testResizeSplitRatioSurvivesToggleDirection),
     // WindowOrdering (slot preservation)
     ("WindowOrdering preserves previous order", testWindowOrderingPreservesPreviousOrder),
     ("WindowOrdering sorts all when no previous order", testWindowOrderingSortsEverythingWhenNoPreviousOrder),

@@ -214,6 +214,7 @@ brew install --build-from-source /tmp/Tessera.rb
 | `⌘⌥W` | Remove focused window |
 | `⌘⌥F` | Toggle fullscreen |
 | `⌘⌥Space` | Toggle split direction (bsp mode) |
+| `⌘⌥[` / `⌘⌥]` | Shrink / grow the focused split (bsp mode) |
 | `⌘⌥.` | Cycle layout: bsp → master-stack → columns |
 | `⌘⌥⇧Q` | Quit daemon |
 
@@ -225,6 +226,8 @@ brew install --build-from-source /tmp/Tessera.rb
   - **columns** — all windows as equal-width columns
   Cycle live with `⌘⌥.`, the menu's **Cycle Layout** item, or IPC `cycleLayout` / `setLayout:masterStack`. The runtime mode resets to the config value on reload/restart.
 - **Split direction** is geometry-based: split the longer dimension of the target leaf (wider → vertical, taller → horizontal).
+- **Split weights**: `⌘⌥[` / `⌘⌥]` nudge the focused bsp split's ratio toward the focused window. Step and clamp range are configurable:
+  `splitResizeStep` (0.10), `splitMinRatio` (0.2), `splitMaxRatio` (0.8) in `config.json`. Ratios reset to 50/50 on a full re-tile (`⌘⌥⏎` / layout switch) but survive window add/remove and split-direction toggles.
 - **New window** splits the largest leaf by area for balanced tile sizes.
 - **Focus** stays on the existing window after a split (configurable via `~/.config/tessera/config.json`).
 - **Gaps**: 8px between windows, 4px outer margin (configurable).
@@ -302,6 +305,7 @@ tessera/
 **Phase 3** — Multi-monitor, hotkey customization, per-app rules
 - [x] Per-monitor BSP workspaces
 - [x] Split direction toggle (`⌘⌥Space`)
+- [x] Split weight resize (`⌘⌥[` / `⌘⌥]`)
 - [x] Per-app tiling rules (float, ignore, sticky, normal) — sticky keeps its tile slot across re-tiles
 - [x] launchd agent integration (`scripts/install_daemon.sh`)
 - [x] Window role/subrole filtering refinements (config-overridable `excludedSubroles`)

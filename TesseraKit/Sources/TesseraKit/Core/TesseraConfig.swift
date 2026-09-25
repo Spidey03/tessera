@@ -29,6 +29,12 @@ public struct TesseraConfig: Sendable, Equatable {
     /// Fraction of the screen given to the master pane in `masterStack` mode
     /// (0 < masterRatio < 1).
     public var masterRatio: Double
+    /// How much one ⌘⌥[ / ⌘⌥] press moves the focused bsp split's ratio.
+    public var splitResizeStep: Double
+    /// Floor/ceiling clamping split ratios to (0…1). Keeps any pane from
+    /// collapsing to zero.
+    public var splitMinRatio: Double
+    public var splitMaxRatio: Double
     public var newWindowFocus: Bool
     public var floatingAppIDs: [String]
     /// Per-app tiling rules: app bundle ID → how it's tiled.
@@ -47,6 +53,9 @@ public struct TesseraConfig: Sendable, Equatable {
         initialSplit: SplitType = .vertical,
         layoutMode: LayoutMode = .bsp,
         masterRatio: Double = 0.6,
+        splitResizeStep: Double = 0.10,
+        splitMinRatio: Double = 0.2,
+        splitMaxRatio: Double = 0.8,
         newWindowFocus: Bool = false,
         floatingAppIDs: [String] = [],
         appRules: [String: AppTilingRule] = [:],
@@ -61,6 +70,9 @@ public struct TesseraConfig: Sendable, Equatable {
         self.initialSplit = initialSplit
         self.layoutMode = layoutMode
         self.masterRatio = masterRatio
+        self.splitResizeStep = splitResizeStep
+        self.splitMinRatio = splitMinRatio
+        self.splitMaxRatio = splitMaxRatio
         self.newWindowFocus = newWindowFocus
         self.floatingAppIDs = floatingAppIDs
         self.appRules = appRules
@@ -77,6 +89,9 @@ public struct TesseraConfig: Sendable, Equatable {
             lhs.initialSplit == rhs.initialSplit &&
             lhs.layoutMode == rhs.layoutMode &&
             lhs.masterRatio == rhs.masterRatio &&
+            lhs.splitResizeStep == rhs.splitResizeStep &&
+            lhs.splitMinRatio == rhs.splitMinRatio &&
+            lhs.splitMaxRatio == rhs.splitMaxRatio &&
             lhs.newWindowFocus == rhs.newWindowFocus &&
             lhs.floatingAppIDs == rhs.floatingAppIDs &&
             lhs.appRules == rhs.appRules &&
