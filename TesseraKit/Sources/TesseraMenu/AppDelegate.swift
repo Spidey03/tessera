@@ -27,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if AXIsProcessTrusted() && !control.isRunning {
             control.startDaemon()
         }
+        statusItemController.startAutomaticUpdateChecks()
     }
 
     func applicationWillTerminate(_ notification: Notification) {

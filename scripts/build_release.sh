@@ -86,7 +86,29 @@ if [ "$SIGNED" = true ]; then
     fi
 fi
 
-# --- 4. DMG -----------------------------------------------------------------
+# --- 4. Updater package + appcast (always produced, signed or not) ----------
+# The in-app updater (TesseraKit AutoUpdater) downloads this zip and swaps the
+# bundle in place; appcast.json is attached to the GitHub release and consumed
+# by UpdateChecker.
+DIST_ZIP="$OUT_DIR/tessera-$VERSION-dist.zip"
+APPCAST="$OUT_DIR/appcast.json"
+echo "==> Building updater package"
+rm -f "$DIST_ZIP"
+ditto -c -k --keepParent "$APP" "$DIST_ZIP" >/dev/null
+DIST_SHA256="$(shasum -a 256 "$DIST_ZIP" | awk '{print $1}')"
+DIST_SIZE="$(stat -f%z "$DIST_ZIP")"
+cat > "$APPCAST" <<APPCAST_JSON
+{
+  "version": "$VERSION",
+  "tag": "v$VERSION",
+  "url": "https://github.com/Spidey03/tessera/releases/download/v$VERSION/tessera-$VERSION-dist.zip",
+  "sha256": "$DIST_SHA256",
+  "size": $DIST_SIZE
+}
+APPCAST_JSON
+[ "$SIGNED" = true ] && [ "$NOTARIZED" = true ] && echo "   (notarized zip: $ZIP)"
+
+# --- 5. DMG -----------------------------------------------------------------
 echo "==> Building DMG"
 DMG_STAGE="$(mktemp -d)/Tessera"
 mkdir -p "$DMG_STAGE"
@@ -95,11 +117,13 @@ ln -s /Applications "$DMG_STAGE/Applications"
 rm -f "$DMG"
 hdiutil create -volname "Tessera $VERSION" -srcfolder "$DMG_STAGE" -ov -format UDZO "$DMG" >/dev/null
 
-# --- 5. Summary ---------------------------------------------------------------
+# --- 6. Summary ---------------------------------------------------------------
 echo ""
 echo "=================  RELEASE ARTIFACTS  ================="
-echo "  DMG : $DMG"
-[ "$SIGNED" = true ] && [ "$NOTARIZED" = true ] && echo "  ZIP : $ZIP"
+echo "  DMG         : $DMG"
+echo "  DIST ZIP    : $DIST_ZIP"
+echo "  APPCAST     : $APPCAST  (sha256: ${DIST_SHA256:0:12}…)"
+[ "$SIGNED" = true ] && [ "$NOTARIZED" = true ] && echo "  NOTAR ZIP   : $ZIP"
 echo "  signed    : $SIGNED   ($([ "$SIGNED" = true ] && echo "$SIGN_IDENTITY" || echo 'ad-hoc — NOT distributable'))"
 echo "  notarized : $NOTARIZED"
 [ "$SIGNED" = true ] && [ "$NOTARIZED" = false ] && echo "  !! build is signed but NOT notarized — Gatekeeper will warn."

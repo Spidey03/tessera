@@ -41,9 +41,10 @@
 - **Granted-lineage startup (macOS 26)**: TCC denies Accessibility/Input Monitoring to launchd descendants and to any locally/ad-hoc signed binary (no Apple `TeamIdentifier`). The `com.tessera.tiling` LaunchAgent opens Terminal once (`/usr/bin/open -a Terminal <app support>/auth_start.zsh`) — the daemon spawns as a descendant of the *granted* Terminal, giving real event taps + tiling at login. Grants belong to your terminal app, not "Tessera". The menu auto-starts a daemon only when it itself runs under a granted parent.
 - **Settings window** (`⌘,` or menu): edits `config.json` gaps, animation steps/duration, new-window-focus, per-app tiling rules **and hotkeys** (click a combo, press the new keys, Reset restores the default); merges into the existing file (unedited keys preserved) and live-reloads the daemon over IPC. Hotkey overrides share the daemon's `HotkeyBindings` model (aliases persist, a claimed key is freed from its previous holder) — new `HotkeySpec`/`HotkeyBinding` in TesseraKit cover the merge/normalize/display logic.
 - **Graceful shutdown**: SIGTERM (launchctl stop) handler posts `DidQuit` and removes the PID file
+- **Built-in updater**: "Check for Updates…" (manual) + "Automatically Check for Updates" (default on) query the latest GitHub release's `appcast.json`, and on Install & Restart download the `tessera-<version>-dist.zip`, extract it, swap the bundle in `~/Library/Application Support/Tessera`, and restart the daemon + menu from a detached helper. `scripts/build_release.sh` now always emits the dist zip + `appcast.json` (sha256, size) alongside the DMG. Pure model logic (`ReleaseVersion` compare, `UpdateAppcast.parse`) lives in TesseraKit and is unit-tested.
 
 ### Testing
-- 105 Swift tests (TesseraTests): BSP tree ops, spatial focus, split toggle, split-state capture/apply (ratio + orientation, surviving-pair stability, restart faithfulness), layout presets, hotkey model (defaults, flag normalization, override merge/freeing, combo display), keybinding matching, ScreenManager rect/wallpaper logic, slot-preserving order, subrole filtering, LayoutState round-trip/legacy decode, float-rect persistence
+- 110 Swift tests (TesseraTests): BSP tree ops, spatial focus, split toggle, split-state capture/apply (ratio + orientation, surviving-pair stability, restart faithfulness), layout presets, hotkey model (defaults, flag normalization, override merge/freeing, combo display), keybinding matching, ScreenManager rect/wallpaper logic, slot-preserving order, subrole filtering, LayoutState round-trip/legacy decode, float-rect persistence, update model (version compare, appcast parse/decision)
 - 27 Python prototype tests (`tests/test_workspace.py`)
 
 ## What's Left
@@ -61,3 +62,4 @@
 - [x] Shared install wiring: `scripts/tessera-install.sh` / `scripts/tessera-uninstall.sh` (used by both the repo scripts and the Homebrew formula) incl. `--check` health verification
 - [x] Menu bar app (`TesseraMenu` — status dot, tile/reload/start-stop, start-at-login)
 - [x] Configuration UI (in-app settings: gaps, animation, focus, per-app rules; saves `config.json` preserving unedited keys and live-reloads via IPC)
+- [x] Built-in updater (menu "Check for Updates…" + auto-check; GitHub-release appcast.json + dist zip; install-and-restart swap)
