@@ -9,6 +9,9 @@ struct DisplayTileResult {
     let workspace: Workspace
     let mapper: WindowMapper
     let newlyFloated: Set<String>
+    /// Every window excluded from the BSP tree (config floaters + overflow
+    /// floaters) — used to persist their absolute frames for restore on boot.
+    let floatedIDs: Set<String>
     let animationTargets: [String: CGPoint]
 }
 
@@ -33,9 +36,13 @@ struct Tiler {
     /// Tiles every display's windows into its own BSP workspace.
     /// `previousOrderKeys` maps each display to the previous layout's window
     /// keys (appName|title) in order, so existing windows keep their tile slots.
+    /// `previousSplitStates` maps each display to `Workspace.captureSplitState()` from the
+    /// tiled state, so split weights survive re-tiles (also re-populated from
+    /// disk on boot).
     /// Returns a per-display result dictionary (empty when no windows).
     @discardableResult
-    func tileAllWindows(previousOrderKeys: [CGDirectDisplayID: [String]] = [:]) -> [CGDirectDisplayID: DisplayTileResult] {
+    func tileAllWindows(previousOrderKeys: [CGDirectDisplayID: [String]] = [:],
+                        previousSplitStates: [CGDirectDisplayID: [String: SplitState]] = [:]) -> [CGDirectDisplayID: DisplayTileResult] {
         let allWindows = WindowDiscovery.allWindows()
         let windows = filterWindows(allWindows)
 
@@ -85,12 +92,13 @@ struct Tiler {
                     return (a.appName, a.title) < (b.appName, b.title)
                 }
             )
-            results[display.id] = tileDisplay(display, windows: orderedWindows)
+            results[display.id] = tileDisplay(display, windows: orderedWindows,
+                                              splitStates: previousSplitStates[display.id] ?? [:])
         }
         return results
     }
 
-    private func tileDisplay(_ display: DisplayInfo, windows: [MacWindow]) -> DisplayTileResult {
+    private func tileDisplay(_ display: DisplayInfo, windows: [MacWindow], splitStates: [String: SplitState] = [:]) -> DisplayTileResult {
         let screenRect = display.rect
         print("[tiler] screen \(display.name) rect: \(screenRect) — \(windows.count) windows")
 
@@ -114,7 +122,7 @@ struct Tiler {
 
         // Build the display tree with only tiled windows, using the active
         // layout mode (bsp, masterStack or columns).
-        let workspace = makeWorkspace(displayID: display.id, ordered: orderedTiledIDs, screenRect: screenRect)
+        let workspace = makeWorkspace(displayID: display.id, ordered: orderedTiledIDs, screenRect: screenRect, splitStates: splitStates)
 
         let layout = workspace.getLayout()
         print("[tiler]   layout has \(layout.count) entries:")
@@ -153,15 +161,18 @@ struct Tiler {
             workspace: resultWorkspace,
             mapper: mapper,
             newlyFloated: allFloated,
+            floatedIDs: floaterIDs.union(allFloated),
             animationTargets: finalTargets
         )
     }
 
     /// Fresh tree for `orderedIDs` under the display's effective layout mode.
-    /// Windows keep their previous slots because order is preserved by the caller.
-    private func makeWorkspace(displayID: CGDirectDisplayID, ordered orderedTiledIDs: [String], screenRect: Rect) -> Workspace {
+    /// Windows keep their previous slots because order is preserved by the caller;
+    /// surviving split ratios are re-applied from `ratios`.
+    private func makeWorkspace(displayID: CGDirectDisplayID, ordered orderedTiledIDs: [String], screenRect: Rect, splitStates: [String: SplitState] = [:]) -> Workspace {
         let workspace = Workspace(monitorRect: screenRect, config: config)
         workspace.applyPreset(layoutMode(for: displayID), orderedIDs: orderedTiledIDs)
+        workspace.applySplitState(splitStates)
         return workspace
     }
 

@@ -244,7 +244,8 @@ final class Daemon: @unchecked Sendable {
     /// Saves per-display workspace + mapper state for subsequent focus/remove operations.
     func tileWithSuppression() {
         observer.isSuppressed = true
-        let results = tiler.tileAllWindows(previousOrderKeys: previousLayoutOrderKeys())
+        let results = tiler.tileAllWindows(previousOrderKeys: previousLayoutOrderKeys(),
+                                           previousSplitStates: previousSplitStatesByDisplay())
 
         // Update per-display state and prune displays that disappeared
         let liveIDs = Set(ScreenManager.displays.map(\.id))
@@ -254,6 +255,10 @@ final class Daemon: @unchecked Sendable {
         }
         currentWorkspaces = currentWorkspaces.filter { liveIDs.contains($0.key) }
         currentMappers = currentMappers.filter { liveIDs.contains($0.key) }
+
+        // Persist the effective state before applying: split ratios per display
+        // and absolute float frames survive re-tiles and restarts.
+        persistEffectiveState(from: results, liveIDs: liveIDs)
 
         for (displayID, result) in results {
             guard let mapper = currentMappers[displayID] else { continue }
@@ -318,6 +323,45 @@ final class Daemon: @unchecked Sendable {
         return keys
     }
 
+    /// Each display's current split ratios, so re-tiles keep surviving splits'
+    /// weights (see `Workspace.captureSplitState`).
+    private func previousSplitStatesByDisplay() -> [CGDirectDisplayID: [String: SplitState]] {
+        currentWorkspaces.reduce(into: [:]) { result, entry in
+            result[entry.key] = entry.value.captureSplitState()
+        }
+    }
+
+    /// Persist per-display split ratios and absolute float frames (resolved
+    /// through the fresh mappers) to state.json — but only when something
+    /// actually changed, so idle re-tiles don't churn the file.
+    private func persistEffectiveState(from results: [CGDirectDisplayID: DisplayTileResult], liveIDs: Set<CGDirectDisplayID>) {
+        var splitStates: [String: [String: SplitState]] = [:]
+        var floatRects: [String: FloatRect] = [:]
+        for (displayID, result) in results {
+            splitStates[String(displayID)] = result.workspace.captureSplitState()
+            let mapper = currentMappers[displayID]
+            for win in mapper?.allWindows ?? [] where result.floatedIDs.contains(win.id) {
+                let key = floaterKey(for: win)
+                let displayNumber = ScreenManager.display(containing: win.frame)?.id ?? displayID
+                floatRects[key] = FloatRect(x: win.position.x, y: win.position.y,
+                                            width: win.size.width, height: win.size.height,
+                                            displayID: displayNumber)
+            }
+        }
+        var state = tiler.layoutState
+        state.prune(liveDisplayIDs: liveIDs)
+        for (key, value) in splitStates { state.setSplitStates(value, for: UInt32(key) ?? 0) }
+        state.setFloatRects(floatRects)
+        guard state != tiler.layoutState else { return }
+        tiler.layoutState = state
+        persistLayoutState()
+    }
+
+    /// Stable identity for a floating window's saved frame.
+    private func floaterKey(for win: MacWindow) -> String {
+        "\(win.appName)|\(win.title)"
+    }
+
     private func animateWindows(displayID: CGDirectDisplayID, targets: [String: CGPoint], startPositions: [String: CGPoint], steps: Int, duration: TimeInterval) {
         guard !targets.isEmpty else { return }
         let interval = duration / Double(max(steps, 1))
@@ -375,11 +419,31 @@ final class Daemon: @unchecked Sendable {
         var updatedMapper = mapper
         var staggerIndex = 0
         for win in newFloaters {
-            updatedMapper.centerOnScreen(id: win.id, screenRect: screenRect, staggerIndex: staggerIndex)
+            if let savedRect = restorableFloatRect(for: win) {
+                updatedMapper.place(id: win.id, rect: savedRect)
+            } else {
+                updatedMapper.centerOnScreen(id: win.id, screenRect: screenRect, staggerIndex: staggerIndex)
+                staggerIndex += 1
+            }
             centeredFloaterIDs.insert(win.id)
-            staggerIndex += 1
         }
         currentMappers[displayID] = updatedMapper
+    }
+
+    /// The saved float frame for `win`, if it still lands on a live display.
+    /// Restoring a stored position is what lets floaters reappear where the
+    /// user left them after a restart; anything off-screen (monitor changed)
+    /// falls through to the default center-on-screen behavior.
+    private func restorableFloatRect(for win: MacWindow) -> Rect? {
+        guard let saved = tiler.layoutState.floatRect(for: floaterKey(for: win)) else { return nil }
+        let slack: Double = 2
+        let insideAny = ScreenManager.displays.contains { display in
+            let r = display.rect
+            return saved.x >= r.x - slack && saved.y >= r.y - slack
+                && saved.x + saved.width <= r.x + r.width + slack
+                && saved.y + saved.height <= r.y + r.height + slack
+        }
+        return insideAny ? saved.rect : nil
     }
 
     // MARK: - Window notification subscription

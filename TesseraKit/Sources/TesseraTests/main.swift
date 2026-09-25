@@ -1036,6 +1036,102 @@ func testLayoutStateSurvivesDaemonStyleReload() throws {
     try assertEqual(reloaded, before)
 }
 
+func testLayoutStateRoundTripsFullState() throws {
+    let url = temporaryStateFile()
+    defer { try? FileManager.default.removeItem(at: url) }
+    var state = LayoutState()
+    state.setMode(.masterStack, for: 1001)
+    state.setSplitStates(["A|B": SplitState(ratio: 0.7, orientation: .vertical)], for: 1001)
+    state.setFloatRects(["Music|Tracks": FloatRect(x: 20, y: 40, width: 800, height: 600, displayID: 1001)])
+    try LayoutStateStore.save(state, to: url)
+    let loaded = LayoutStateStore.load(from: url)
+    try assertEqual(loaded, state)
+    try assertEqual(loaded.splitStates(for: 1001)["A|B"]?.ratio, 0.7)
+    try assertEqual(loaded.floatRect(for: "Music|Tracks")?.width, 800)
+}
+
+func testLayoutStateOldFileStillDecodes() throws {
+    // A state.json written before splitStates/floatRects existed must still
+    // load (both new sections default to empty).
+    let url = temporaryStateFile()
+    defer { try? FileManager.default.removeItem(at: url) }
+    try Data(#"{"displayModes":{"1":"columns"}}"#.utf8).write(to: url)
+    let loaded = LayoutStateStore.load(from: url)
+    try assertEqual(loaded.mode(for: 1, fallback: .bsp), .columns)
+    try assertEqual(loaded.splitStates(for: 1).count, 0)
+    try assertEqual(loaded.floatRects.count, 0)
+}
+
+func testLayoutStateSetSplitStatesEmptyRemovesEntry() throws {
+    var state = LayoutState()
+    state.setSplitStates(["A|B": SplitState(ratio: 0.7, orientation: .vertical)], for: 1001)
+    try assertEqual(state.splitStates.count, 1)
+    state.setSplitStates([:], for: 1001)
+    try assertEqual(state.splitStates.count, 0)
+}
+
+// MARK: - Split state persistence (captureSplitState / applySplitState)
+
+func testCaptureApplyRatiosRoundTripPreservesGeometry() throws {
+    let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    ws.applyPreset(.bsp, orderedIDs: ["A", "B"])
+    ws.focusWindow(id: "A")
+    ws.resizeSplit(delta: 0.2) // A grows → ratio 0.7
+    let before = ws.getLayout().first { $0.0.id == "A" }!.1
+    try assertEqual(Int(before.width.rounded()), 1330) // 1912*0.7 - 8
+
+    let captured = ws.captureSplitState()
+    try assertEqual(captured["A|B"]?.ratio, 0.7)
+    try assertEqual(captured["A|B"]?.orientation, .vertical)
+
+    // Simulate the daemon re-tile: full tree rebuild + ratio restore.
+    let rebuilt = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    rebuilt.applyPreset(.bsp, orderedIDs: ["A", "B"])
+    try assertEqual(Int(rebuilt.getLayout().first { $0.0.id == "A" }!.1.width.rounded()), 948) // 50/50
+    rebuilt.applySplitState(captured)
+    let after = rebuilt.getLayout().first { $0.0.id == "A" }!.1
+    try assertEqual(Int(after.width.rounded()), 1330)
+    try assertEqual(Int(after.x.rounded()), Int(before.x.rounded()))
+}
+
+func testApplySplitStateKeepsSurvivingSplitsAcrossAdds() throws {
+    // 1. User tree: A|B at 0.7.
+    let before = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    before.applyPreset(.bsp, orderedIDs: ["A", "B"])
+    before.focusWindow(id: "A")
+    before.resizeSplit(delta: 0.2)
+    let persisted = before.captureSplitState()
+    try assertEqual(persisted["A|B"]?.ratio, 0.7)
+
+    // 2. C window arrives → daemon re-tiles [A,B,C] with the persisted state.
+    //    The rebuild re-shapes (A is now narrower, so it splits horizontally),
+    //    but the surviving A|B grouping keeps its weight via the pair key.
+    let retiled = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    retiled.applyPreset(.bsp, orderedIDs: ["A", "B", "C"])
+    retiled.applySplitState(persisted)
+    let afterAdd = retiled.getLayout().map { "\($0.0.id):\(Int($0.1.x.rounded()))" }
+    try assertEqual(afterAdd, ["A:8", "B:677", "C:964"]) // A|B pair holds 0.7 of the left split
+
+    // 3. Daemon persists the retiled state; a restart must reproduce it exactly.
+    let retiledState = retiled.captureSplitState()
+    try assertEqual(retiledState["A|B"]?.ratio, 0.7)
+    let restart = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    restart.applyPreset(.bsp, orderedIDs: ["A", "B", "C"])
+    restart.applySplitState(retiledState)
+    let afterRestart = restart.getLayout().map { "\($0.0.id):\(Int($0.1.x.rounded()))" }
+    try assertEqual(afterRestart, afterAdd)
+}
+
+func testApplySplitStateIgnoresUnknownKeys() throws {
+    let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    ws.applyPreset(.bsp, orderedIDs: ["A", "B"])
+    ws.applySplitState(["X|Y": SplitState(ratio: 0.9, orientation: .vertical),
+                                 "A|B": SplitState(ratio: 0.65, orientation: .vertical)])
+    // Matching key applies, unmatched keys are ignored.
+    let a = ws.getLayout().first { $0.0.id == "A" }!.1
+    try assertEqual(Int(a.width.rounded()), 1235) // 1912*0.65 - 8 = 1234.8 → 1235
+}
+
 // MARK: - Runner
 
 let tests: [(String, () throws -> Void)] = [
@@ -1139,6 +1235,13 @@ let tests: [(String, () throws -> Void)] = [
     ("LayoutState store round-trip", testLayoutStateStoreRoundTrip),
     ("LayoutState store missing and corrupt files", testLayoutStateStoreMissingAndCorruptFiles),
     ("LayoutState survives daemon-style reload", testLayoutStateSurvivesDaemonStyleReload),
+    ("LayoutState round-trips full state", testLayoutStateRoundTripsFullState),
+    ("LayoutState old file still decodes", testLayoutStateOldFileStillDecodes),
+    ("LayoutState setSplitStates empty removes entry", testLayoutStateSetSplitStatesEmptyRemovesEntry),
+    // Split ratio persistence
+    ("capture/apply ratios round-trip preserves geometry", testCaptureApplyRatiosRoundTripPreservesGeometry),
+    ("applySplitState keeps surviving splits across adds", testApplySplitStateKeepsSurvivingSplitsAcrossAdds),
+    ("applySplitState ignores unknown keys", testApplySplitStateIgnoresUnknownKeys),
 ]
 
 var passed = 0

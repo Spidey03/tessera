@@ -6,7 +6,8 @@
 - **BSP tree** with `addWindow` (splits largest leaf), `removeWindow` (collapses parent), `getLayout` (in-order leaves)
 - **Geometry-based split direction**: split the longer dimension of the target leaf (wider → vertical, taller → horizontal). Removed global V/H alternation.
 - **Split direction toggle** (`⌘⌥Space`): flips the focused window's parent split and reflows its subtree.
-- **Split weight resize** (`⌘⌥[` / `⌘⌥]`): nudges the focused bsp split's ratio (positive = grows the focused window) within `splitMinRatio`…`splitMaxRatio`; step `splitResizeStep`. Ratios survive window add/remove and split toggles; reset on a full re-tile.
+- **Split weight resize** (`⌘⌥[` / `⌘⌥]`): nudges the focused bsp split's ratio (positive = grows the focused window) within `splitMinRatio`…`splitMaxRatio`; step `splitResizeStep`. Split weights **and orientation** are captured per split pair (`"leftmost|rightmost"` node identity) and survive window add/remove, split toggles, full re-tiles, and daemon restarts (`state.json`). Splits that disappear on a rebuild fall back to default 50/50 + geometry-derived orientation; surviving pairs keep their weights.
+- **Float position persistence**: floating windows' absolute frames and target display are stored per `"appName|title"` in `state.json`, and restored (instead of screen-centered) when the window is still visible on a live display at the next daemon launch; windows that left a display fall back to centering.
 - **Layout presets** (`layoutMode`: `bsp` | `masterStack` | `columns`): master-stack gives the first window a `masterRatio` pane with the rest as rows; columns are equal-width. Modes are **independent per display** — `⌘⌥.` / menu **Cycle Layout** / IPC `cycleLayout` / `setLayout:<mode>` act on the focused display only — and each display's override persists to `~/.config/tessera/state.json` across restarts and reloads (pruned when a monitor unplugs).
 - **Gap system**: `gapSize/2` inset from each tile edge, `outerGap` inset from screen edges, configurable via config file
 - **Spatial focus navigation**: `focusLeft/Right/Up/Down` pick the nearest window in that direction (by proximity + overlap); `cycleNext/Prev` for tab-order cycling; `focusedWindowID` tracks the focused leaf
@@ -42,7 +43,7 @@
 - **Graceful shutdown**: SIGTERM (launchctl stop) handler posts `DidQuit` and removes the PID file
 
 ### Testing
-- 77 Swift tests (TesseraTests): BSP tree ops, spatial focus, split toggle, layout presets, keybinding matching, ScreenManager rect/wallpaper logic, slot-preserving order, subrole filtering
+- 95 Swift tests (TesseraTests): BSP tree ops, spatial focus, split toggle, split-state capture/apply (ratio + orientation, surviving-pair stability, restart faithfulness), layout presets, keybinding matching, ScreenManager rect/wallpaper logic, slot-preserving order, subrole filtering, LayoutState round-trip/legacy decode, float-rect persistence
 - 27 Python prototype tests (`tests/test_workspace.py`)
 
 ## What's Left

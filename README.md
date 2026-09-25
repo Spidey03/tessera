@@ -227,7 +227,8 @@ brew install --build-from-source /tmp/Tessera.rb
   `⌘⌥.` cycles the **focused display**'s mode (menu **Cycle Layout** and IPC `cycleLayout` / `setLayout:<mode>` do the same). Modes are **independent per monitor**: an override only changes that display, the rest keep their own mode. Overrides persist across restarts/reloads in `~/.config/tessera/state.json` and clear for displays no longer connected.
 - **Split direction** is geometry-based: split the longer dimension of the target leaf (wider → vertical, taller → horizontal).
 - **Split weights**: `⌘⌥[` / `⌘⌥]` nudge the focused bsp split's ratio toward the focused window. Step and clamp range are configurable:
-  `splitResizeStep` (0.10), `splitMinRatio` (0.2), `splitMaxRatio` (0.8) in `config.json`. Ratios reset to 50/50 on a full re-tile (`⌘⌥⏎` / layout switch) but survive window add/remove and split-direction toggles.
+  `splitResizeStep` (0.10), `splitMinRatio` (0.2), `splitMaxRatio` (0.8) in `config.json`. Weights (and split orientation) are remembered per split pair, and survive window add/remove, split-direction toggles, full re-tiles (`⌘⌥⏎` / layout switch), and daemon restarts via `state.json`. Windows that appear later rejoin the re-shaped tree but surviving pairs keep their weights.
+- **Floating windows** stay where you put them: their absolute frame is remembered in `state.json` and restored on the daemon's next launch (a saved frame restores if it still fits on a connected display; otherwise the window falls back to screen-centered). Rule-based floaters that were open at shutdown for short stretches keep their positions.
 - **New window** splits the largest leaf by area for balanced tile sizes.
 - **Focus** stays on the existing window after a split (configurable via `~/.config/tessera/config.json`).
 - **Gaps**: 8px between windows, 4px outer margin (configurable).

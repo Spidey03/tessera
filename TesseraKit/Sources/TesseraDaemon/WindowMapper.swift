@@ -175,6 +175,16 @@ public struct WindowMapper {
         return false
     }
 
+    @discardableResult
+    public mutating func place(id: String, rect: Rect) -> Bool {
+        guard var macWin = mapping[id] else { return false }
+        macWin.setSize(CGSize(width: rect.width, height: rect.height))
+        _ = macWin.setPosition(CGPoint(x: rect.x, y: rect.y))
+        mapping[id] = macWin
+        print("[mapper]   \(macWin.appName): \"\(macWin.title)\" → restored float at (\(Int(rect.x)),\(Int(rect.y))) \(Int(rect.width))x\(Int(rect.height))")
+        return true
+    }
+
     private func screenCenter(size: CGSize, screenRect: Rect, staggerIndex: Int = 0) -> CGPoint {
         let top = screenRect.y
         let cx = screenRect.x + (screenRect.width - Double(size.width)) / 2
