@@ -1132,6 +1132,86 @@ func testApplySplitStateIgnoresUnknownKeys() throws {
     try assertEqual(Int(a.width.rounded()), 1235) // 1912*0.65 - 8 = 1234.8 → 1235
 }
 
+// MARK: - Hotkey model (HotkeyBinding / HotkeyBindings)
+
+func testHotkeyDefaultsCarryDocumentedCombos() throws {
+    try assertEqual(HotkeyBindings.defaultDisplay(for: "tile"), "⌘⌥⏎")
+    try assertEqual(HotkeyBindings.defaultDisplay(for: "quit"), "⌘⌥⇧Q")
+    try assertEqual(HotkeyBindings.defaultDisplay(for: "focusLeft"), "⌘⌥H")
+    try assertEqual(HotkeyBindings.defaultDisplay(for: "focusRight"), "⌘⌥L")
+    try assertEqual(HotkeyBindings.defaultDisplay(for: "cycleNext"), "⌘⌥↓")
+    try assertEqual(HotkeyBindings.defaultDisplay(for: "resizeShrink"), "⌘⌥[")
+}
+
+func testHotkeyNormalizedFlagsAliasesAndOrder() throws {
+    try assertEqual(HotkeyBindings.normalizedFlags(["alt", "command", "CTRL"]), ["cmd", "opt", "ctrl"])
+    try assertEqual(HotkeyBindings.normalizedFlags(["opt", "cmd", "opt", "shift", "unknown"]), ["cmd", "opt", "shift"])
+    try assertEqual(HotkeyBindings.normalizedFlags([]), [])
+    try assertEqual(HotkeyBindings.normalizedFlags(["capslock", "fn"]), ["fn", "caps"])
+}
+
+func testHotkeyMergeKeepsDefaultsWithoutOverrides() throws {
+    try assert(HotkeyBindings.merge(defaults: HotkeyBindings.defaults, overrides: nil) == HotkeyBindings.defaults)
+    try assert(HotkeyBindings.merge(defaults: HotkeyBindings.defaults, overrides: [:]) == HotkeyBindings.defaults)
+}
+
+func testHotkeyMergeOverrideAddsComboAndKeepsAliases() throws {
+    // Overriding focusLeft onto ⌘⌥T (17) adds the new combo while the H (4)
+    // and K (40) aliases survive; T was otherwise unclaimed so nothing frees.
+    let merged = HotkeyBindings.merge(defaults: HotkeyBindings.defaults,
+                                      overrides: ["focusLeft": HotkeySpec(keyCode: 17, flags: ["cmd", "opt"])])
+    try assertEqual(merged.filter { $0.action == "focusLeft" }.count, 3)
+    try assert(merged.contains { $0.action == "focusLeft" && $0.keyCode == 17 })
+    try assert(merged.contains { $0.action == "focusLeft" && $0.keyCode == 4 })
+    try assert(merged.contains { $0.action == "focusLeft" && $0.keyCode == 40 })
+    try assert(merged.contains { $0.action == "tile" && $0.keyCode == 36 }) // tile untouched
+}
+
+func testHotkeyMergeOverrideFreesOnlyTheClaimedKey() throws {
+    // Rebind "remove" onto L (37): focusRight loses its L but keeps J (38).
+    let merged = HotkeyBindings.merge(defaults: HotkeyBindings.defaults,
+                                      overrides: ["remove": HotkeySpec(keyCode: 37, flags: ["cmd", "opt"])])
+    try assert(merged.contains { $0.action == "remove" && $0.keyCode == 37 })
+    try assert(!merged.contains { $0.action == "focusRight" && $0.keyCode == 37 })
+    try assert(merged.contains { $0.action == "focusRight" && $0.keyCode == 38 })
+}
+
+func testHotkeyMergeActiveCombos() throws {
+    try assertEqual(HotkeyBindings.activeCombos(HotkeyBindings.defaults, action: "focusLeft"), ["⌘⌥H", "⌘⌥K"])
+    try assertEqual(HotkeyBindings.activeCombos(HotkeyBindings.defaults, action: "quit"), ["⌘⌥⇧Q"])
+    let merged = HotkeyBindings.merge(defaults: HotkeyBindings.defaults,
+                                      overrides: ["focusRight": HotkeySpec(keyCode: 18, flags: ["cmd", "opt"])])
+    try assertEqual(HotkeyBindings.activeCombos(merged, action: "focusRight"), ["⌘⌥1", "⌘⌥L", "⌘⌥J"])
+}
+
+func testHotkeyMergePreservesUnknownAction() throws {
+    let merged = HotkeyBindings.merge(defaults: HotkeyBindings.defaults,
+                                      overrides: ["shutdown": HotkeySpec(keyCode: 44, flags: ["cmd", "opt"])])
+    try assert(merged.contains { $0.action == "shutdown" && $0.keyCode == 44 })
+    try assertEqual(merged.count, HotkeyBindings.defaults.count + 1)
+}
+
+func testHotkeyKeySymbols() throws {
+    try assertEqual(HotkeyBindings.keySymbol(for: 36), "⏎")
+    try assertEqual(HotkeyBindings.keySymbol(for: 4), "H")
+    try assertEqual(HotkeyBindings.keySymbol(for: 3), "F")
+    try assertEqual(HotkeyBindings.keySymbol(for: 125), "↓")
+    try assertEqual(HotkeyBindings.keySymbol(for: 49), "Space")
+    try assert(HotkeyBindings.keySymbol(for: 255).hasPrefix("Key 0x"))
+}
+
+func testHotkeyDisplayUsesCanonicalModifierOrder() throws {
+    try assertEqual(HotkeyBinding(action: "tile", keyCode: 36, flags: ["opt", "cmd"]).display, "⌘⌥⏎")
+    try assertEqual(HotkeyBinding(action: "quit", keyCode: 12, flags: ["shift", "cmd", "opt"]).display, "⌘⌥⇧Q")
+}
+
+func testHotkeyCanonicalActionsCoverDefaults() throws {
+    let defaultActions = Set(HotkeyBindings.defaults.map { $0.action })
+    let canonical = Set(HotkeyBindings.canonicalActions)
+    try assert(defaultActions.isSubset(of: canonical))
+    try assertEqual(HotkeyBindings.canonicalActions.count, 14)
+}
+
 // MARK: - Runner
 
 let tests: [(String, () throws -> Void)] = [
@@ -1242,6 +1322,17 @@ let tests: [(String, () throws -> Void)] = [
     ("capture/apply ratios round-trip preserves geometry", testCaptureApplyRatiosRoundTripPreservesGeometry),
     ("applySplitState keeps surviving splits across adds", testApplySplitStateKeepsSurvivingSplitsAcrossAdds),
     ("applySplitState ignores unknown keys", testApplySplitStateIgnoresUnknownKeys),
+    // Hotkey model
+    ("Hotkey defaults carry documented combos", testHotkeyDefaultsCarryDocumentedCombos),
+    ("Hotkey normalizedFlags aliases + order", testHotkeyNormalizedFlagsAliasesAndOrder),
+    ("Hotkey merge keeps defaults without overrides", testHotkeyMergeKeepsDefaultsWithoutOverrides),
+    ("Hotkey merge override adds combo and keeps aliases", testHotkeyMergeOverrideAddsComboAndKeepsAliases),
+    ("Hotkey merge override frees only the claimed key", testHotkeyMergeOverrideFreesOnlyTheClaimedKey),
+    ("Hotkey merge active combos list", testHotkeyMergeActiveCombos),
+    ("Hotkey merge preserves unknown actions", testHotkeyMergePreservesUnknownAction),
+    ("Hotkey key symbols", testHotkeyKeySymbols),
+    ("Hotkey display uses canonical modifier order", testHotkeyDisplayUsesCanonicalModifierOrder),
+    ("Hotkey canonical actions cover defaults", testHotkeyCanonicalActionsCoverDefaults),
 ]
 
 var passed = 0
