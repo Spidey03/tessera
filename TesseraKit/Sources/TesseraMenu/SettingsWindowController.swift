@@ -80,6 +80,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     func showSettings() {
         window?.center()
         loadValues()
+        window?.orderFrontRegardless()
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -217,12 +218,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     }
 
     private func rebuildHotkeyRows() {
-        for row in hotkeyRows {
-            hotkeyStack.removeArrangedSubview(row.comboButton)
-            hotkeyStack.removeArrangedSubview(row.resetButton)
-            for view in [row.comboButton, row.resetButton] {
-                view.removeFromSuperview()
-            }
+        for subview in hotkeyStack.arrangedSubviews {
+            hotkeyStack.removeArrangedSubview(subview)
         }
         hotkeyRows = []
         cancelHotkeyRecording()
@@ -368,7 +365,6 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         let removed = rulesStack.arrangedSubviews[sender.tag]
         ruleRows.remove(at: sender.tag)
         rulesStack.removeArrangedSubview(removed)
-        removed.removeFromSuperview()
         for i in 0..<ruleRows.count {
             if let button = rulesStack.arrangedSubviews[i].subviews.compactMap({ $0 as? NSButton }).first {
                 button.tag = i
