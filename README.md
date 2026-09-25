@@ -215,7 +215,7 @@ brew install --build-from-source /tmp/Tessera.rb
 | `⌘⌥F` | Toggle fullscreen |
 | `⌘⌥Space` | Toggle split direction (bsp mode) |
 | `⌘⌥[` / `⌘⌥]` | Shrink / grow the focused split (bsp mode) |
-| `⌘⌥.` | Cycle layout: bsp → master-stack → columns |
+| `⌘⌥.` | Cycle layout on the focused display: bsp → master-stack → columns |
 | `⌘⌥⇧Q` | Quit daemon |
 
 ### Layout Behavior
@@ -224,7 +224,7 @@ brew install --build-from-source /tmp/Tessera.rb
   - **bsp** — binary space partition tree (default, split-direction toggle per node)
   - **masterStack** — first window as a fixed-ratio master pane, the rest stacked as rows in the remaining column
   - **columns** — all windows as equal-width columns
-  Cycle live with `⌘⌥.`, the menu's **Cycle Layout** item, or IPC `cycleLayout` / `setLayout:masterStack`. The runtime mode resets to the config value on reload/restart.
+  `⌘⌥.` cycles the **focused display**'s mode (menu **Cycle Layout** and IPC `cycleLayout` / `setLayout:<mode>` do the same). Modes are **independent per monitor**: an override only changes that display, the rest keep their own mode. Overrides persist across restarts/reloads in `~/.config/tessera/state.json` and clear for displays no longer connected.
 - **Split direction** is geometry-based: split the longer dimension of the target leaf (wider → vertical, taller → horizontal).
 - **Split weights**: `⌘⌥[` / `⌘⌥]` nudge the focused bsp split's ratio toward the focused window. Step and clamp range are configurable:
   `splitResizeStep` (0.10), `splitMinRatio` (0.2), `splitMaxRatio` (0.8) in `config.json`. Ratios reset to 50/50 on a full re-tile (`⌘⌥⏎` / layout switch) but survive window add/remove and split-direction toggles.

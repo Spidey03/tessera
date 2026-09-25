@@ -7,7 +7,7 @@
 - **Geometry-based split direction**: split the longer dimension of the target leaf (wider → vertical, taller → horizontal). Removed global V/H alternation.
 - **Split direction toggle** (`⌘⌥Space`): flips the focused window's parent split and reflows its subtree.
 - **Split weight resize** (`⌘⌥[` / `⌘⌥]`): nudges the focused bsp split's ratio (positive = grows the focused window) within `splitMinRatio`…`splitMaxRatio`; step `splitResizeStep`. Ratios survive window add/remove and split toggles; reset on a full re-tile.
-- **Layout presets** (`layoutMode`: `bsp` | `masterStack` | `columns`): master-stack gives the first window a `masterRatio` pane with the rest as rows; columns are equal-width. Switch live via `⌘⌥.`, the menu's **Cycle Layout**, or IPC `cycleLayout` / `setLayout:<mode>`; runtime mode resets to the config on reload.
+- **Layout presets** (`layoutMode`: `bsp` | `masterStack` | `columns`): master-stack gives the first window a `masterRatio` pane with the rest as rows; columns are equal-width. Modes are **independent per display** — `⌘⌥.` / menu **Cycle Layout** / IPC `cycleLayout` / `setLayout:<mode>` act on the focused display only — and each display's override persists to `~/.config/tessera/state.json` across restarts and reloads (pruned when a monitor unplugs).
 - **Gap system**: `gapSize/2` inset from each tile edge, `outerGap` inset from screen edges, configurable via config file
 - **Spatial focus navigation**: `focusLeft/Right/Up/Down` pick the nearest window in that direction (by proximity + overlap); `cycleNext/Prev` for tab-order cycling; `focusedWindowID` tracks the focused leaf
 - **Largest-leaf strategy**: `findLargestLeaf()` replaces `findFocusedLeaf()` for balanced BSP tree; ties go to left child
@@ -23,7 +23,7 @@
 - **CGEventTap** captures keyDown events; matched bindings dispatched via `CFRunLoopPerformBlock`
 - **Per-display BSP workspaces**: each display gets its own stateful `Workspace` + `WindowMapper`; windows are grouped to their containing display and tiled there
 - **WindowMapper**: bridges pure `Window` ↔ `MacWindow`; `applyLayout`/`computeLayout` apply BSP rects and detect overflow; sorts by (y, x, appName, title) for deterministic BSP
-- **Vim-style hotkeys**: H/I = focus left, J/M = focus right, K = up/prev, L = down/next; arrows cycle; remove (⌘⌥W); fullscreen (⌘⌥F); toggle split (⌘⌥Space); resize split (⌘⌥[ / ⌘⌥]); quit (⌘⌥⇧Q)
+- **Vim-style hotkeys**: H/I = focus left, J/M = focus right, K = up/prev, L = down/next; arrows cycle; remove (⌘⌥W); fullscreen (⌘⌥F); toggle split (⌘⌥Space); resize split (⌘⌥[ / ⌘⌥]); cycle layout on focused display (⌘⌥.); quit (⌘⌥⇧Q)
 - **Coordinate fix**: per-display rect conversion in top-left coordinates matching AX — eliminates menu-bar induced overlap in horizontal splits
 - **`floatingApps` config** (`floatingAppIDs: [String]`): floating apps stay out of the BSP tree and are screen-centered; legacy key auto-migrated into `appRules` as `.float`
 - **Per-app tiling rules** (`appRules` config, `AppTilingRule`): `normal` (tiled), `float` (out of BSP, keeps position), `ignore` (completely untouched/invisible to tiler), `sticky` (tiled but keeps its tile slot across re-tiles via order-preserving rebuild)

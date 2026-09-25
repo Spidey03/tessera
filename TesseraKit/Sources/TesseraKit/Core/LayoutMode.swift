@@ -4,7 +4,7 @@
 /// which are still derived live from the screen). Tiling always rebuilds each
 /// display's tree from its ordered window stack, so a mode is just the recipe
 /// used to build that tree from the same ordered list.
-public enum LayoutMode: String, CaseIterable, Sendable, Equatable {
+public enum LayoutMode: String, Codable, CaseIterable, Sendable, Equatable {
     /// Binary space partition — the classic Tessera tree (left/right or top/
     /// bottom splits of the largest leaf). This is the default and the only
     /// mode that supports split-direction toggling per node.

@@ -30,7 +30,11 @@ if CommandLine.arguments.contains("--help") {
       ⌘⌥F          Fullscreen toggle
       ⌘⌥Space      Toggle split direction
       ⌘⌥[ / ⌘⌥]    Shrink / grow focused split
+      ⌘⌥.          Cycle layout on the focused display
       ⌘⌥⇧Q         Quit daemon
+
+    Per-display layout modes persist across restarts in
+    ~/.config/tessera/state.json.
     """)
     exit(0)
 }
@@ -43,6 +47,10 @@ print("""
 
 ConfigLoader.ensureConfigDir()
 let loaded = ConfigLoader.load()
-let tiler = Tiler(config: loaded.tesseraConfig)
+let layoutState = LayoutStateStore.load(from: ConfigLoader.statePath)
+if !layoutState.displayModes.isEmpty {
+    print("[state] restored \(layoutState.displayModes.count) per-display layout override(s) from \(ConfigLoader.statePath.path)")
+}
+let tiler = Tiler(config: loaded.tesseraConfig, layoutState: layoutState)
 let daemon = Daemon(tiler: tiler, bindings: loaded.bindings)
 daemon.run()

@@ -959,6 +959,83 @@ func testApplyPresetEmptyClearsTree() throws {
     try assertNil(ws.root)
 }
 
+// MARK: - Per-display layout state (LayoutState)
+
+private func temporaryStateFile() -> URL {
+    FileManager.default.temporaryDirectory
+        .appendingPathComponent("tessera-layout-\(UUID().uuidString).json")
+}
+
+func testLayoutStateDefaultsToNoOverrides() throws {
+    let state = LayoutState()
+    try assertEqual(state.displayModes.count, 0)
+    try assertEqual(state.mode(for: 1001, fallback: .bsp), .bsp)
+    try assertEqual(state.mode(for: 1001, fallback: .masterStack), .masterStack)
+}
+
+func testLayoutStateOverrideResolutionAndClear() throws {
+    var state = LayoutState()
+    state.setMode(.masterStack, for: 1001)
+    try assertEqual(state.mode(for: 1001, fallback: .bsp), .masterStack)
+    try assertEqual(state.mode(for: 1002, fallback: .bsp), .bsp)
+    state.setMode(nil, for: 1001)
+    try assertEqual(state.mode(for: 1001, fallback: .bsp), .bsp)
+    state.setMode(.columns, for: 1003)
+    state.setMode(nil, for: 1003)
+    try assertEqual(state.displayModes.count, 0)
+}
+
+func testLayoutStatePruneDropsUnpluggedDisplays() throws {
+    var state = LayoutState(displayModes: ["1001": .masterStack, "1002": .columns, "1003": .bsp])
+    state.prune(liveDisplayIDs: [1001, 1003])
+    try assertEqual(state.mode(for: 1001, fallback: .bsp), .masterStack)
+    try assertEqual(state.mode(for: 1002, fallback: .bsp), .bsp) // pruned → fallback
+    try assertEqual(state.displayModes.count, 2)
+}
+
+func testLayoutStateStoreRoundTrip() throws {
+    let url = temporaryStateFile()
+    defer { try? FileManager.default.removeItem(at: url) }
+    var state = LayoutState()
+    state.setMode(.columns, for: 1001)
+    state.setMode(.masterStack, for: 1002)
+    try LayoutStateStore.save(state, to: url)
+    let loaded = LayoutStateStore.load(from: url)
+    try assertEqual(loaded, state)
+    try assertEqual(loaded.mode(for: 1001, fallback: .bsp), .columns)
+    try assertEqual(loaded.mode(for: 1002, fallback: .bsp), .masterStack)
+}
+
+func testLayoutStateStoreMissingAndCorruptFiles() throws {
+    let missing = temporaryStateFile()
+    defer { try? FileManager.default.removeItem(at: missing) }
+    try assertEqual(LayoutStateStore.load(from: missing), LayoutState())
+
+    let corrupt = temporaryStateFile()
+    defer { try? FileManager.default.removeItem(at: corrupt) }
+    try Data("not json at all {{{".utf8).write(to: corrupt)
+    try assertEqual(LayoutStateStore.load(from: corrupt), LayoutState())
+}
+
+func testLayoutStateSurvivesDaemonStyleReload() throws {
+    // Simulates the daemon boot + reload: save persistable state to disk,
+    // "restart" by loading from the same file, and confirm the override
+    // (and the fallback for unset displays) come back.
+    let url = temporaryStateFile()
+    defer { try? FileManager.default.removeItem(at: url) }
+    var before = LayoutState()
+    before.setMode(.masterStack, for: 1001)
+    try LayoutStateStore.save(before, to: url)
+
+    let boot = LayoutStateStore.load(from: url)
+    try assertEqual(boot.mode(for: 1001, fallback: .bsp), .masterStack)
+    try assertEqual(boot.mode(for: 9999, fallback: .bsp), .bsp)
+
+    let reloaded = LayoutStateStore.load(from: url)
+    try assertEqual(reloaded.mode(for: 1001, fallback: .bsp), .masterStack)
+    try assertEqual(reloaded, before)
+}
+
 // MARK: - Runner
 
 let tests: [(String, () throws -> Void)] = [
@@ -1055,6 +1132,13 @@ let tests: [(String, () throws -> Void)] = [
     ("columns get equal width/height", testColumnsGetEqualWidth),
     ("columns split adjusts with count", testColumnsSplitAdjustsWithCount),
     ("applyPreset empty clears tree", testApplyPresetEmptyClearsTree),
+    // Per-display layout state
+    ("LayoutState defaults to no overrides", testLayoutStateDefaultsToNoOverrides),
+    ("LayoutState override resolution and clear", testLayoutStateOverrideResolutionAndClear),
+    ("LayoutState prune drops unplugged displays", testLayoutStatePruneDropsUnpluggedDisplays),
+    ("LayoutState store round-trip", testLayoutStateStoreRoundTrip),
+    ("LayoutState store missing and corrupt files", testLayoutStateStoreMissingAndCorruptFiles),
+    ("LayoutState survives daemon-style reload", testLayoutStateSurvivesDaemonStyleReload),
 ]
 
 var passed = 0
