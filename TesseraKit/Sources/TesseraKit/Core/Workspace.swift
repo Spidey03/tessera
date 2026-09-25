@@ -1,8 +1,25 @@
+/// A split's persisted state: how much of the parent rect the FIRST child gets
+/// (`ratio`) and which way the split points (`orientation`).
+public struct SplitState: Codable, Sendable, Equatable {
+    public var ratio: Double
+    public var orientation: SplitType
+
+    public init(ratio: Double, orientation: SplitType) {
+        self.ratio = ratio
+        self.orientation = orientation
+    }
+}
+
 public final class Workspace: @unchecked Sendable {
     public let monitorRect: Rect
     public let config: TesseraConfig
     public private(set) var root: TreeNode?
     public private(set) var nextSplit: SplitType
+    /// Layout mode last applied via `applyPreset` (nil until tiled). Drives
+    /// whether split ratios are meaningful: only the bsp tree recomputes
+    /// geometry from `node.ratio` (reflow), masterStack/columns store geometry
+    /// on leaves and ignore ratios.
+    public private(set) var currentMode: LayoutMode?
 
     public init(monitorRect: Rect, config: TesseraConfig = TesseraConfig()) {
         self.monitorRect = monitorRect
@@ -137,6 +154,56 @@ public final class Workspace: @unchecked Sendable {
         return true
     }
 
+    /// Snapshot every internal node's split state (ratio + orientation), keyed by a
+    /// node-identity string. The identity is `"<leftmost|<rightmost>"` of the
+    /// node's direct children's leftmost leaf windows: unique per node and
+    /// stable while those two leaves exist — so surviving splits keep their
+    /// weights even when windows elsewhere in the tree are added or removed.
+    /// Only meaningful in bsp mode (masterStack/columns ignore ratios).
+    public func captureSplitState() -> [String: SplitState] {
+        guard currentMode == .bsp else { return [:] }
+        var states: [String: SplitState] = [:]
+        forEachInternalNode(root) { node in
+            guard let leftmost = leftmostLeafWindowID(node.leftChild),
+                  let rightmost = leftmostLeafWindowID(node.rightChild) else { return }
+            states["\(leftmost)|\(rightmost)"] = SplitState(
+                ratio: node.ratio ?? 0.5,
+                orientation: node.splitType ?? .vertical
+            )
+        }
+        return states
+    }
+
+    /// Restore split states captured by `captureSplitState`. Nodes whose identity
+    /// key is absent (new splits after an add, reshaped subtrees) keep the
+    /// default 50/50 + geometry-derived orientation. Reflows the bsp tree so
+    /// leaf geometry reflects the restored weights and orientations.
+    public func applySplitState(_ states: [String: SplitState]) {
+        guard currentMode == .bsp, root != nil, !states.isEmpty else { return }
+        forEachInternalNode(root) { node in
+            guard let leftmost = leftmostLeafWindowID(node.leftChild),
+                  let rightmost = leftmostLeafWindowID(node.rightChild),
+                  let state = states["\(leftmost)|\(rightmost)"] else { return }
+            node.ratio = state.ratio
+            node.splitType = state.orientation
+        }
+        let gap = config.gapSize / 2.0
+        reflow(root, in: root!.rect, gap: gap)
+    }
+
+    private func forEachInternalNode(_ node: TreeNode?, _ body: (TreeNode) -> Void) {
+        guard let node, !node.isLeaf else { return }
+        forEachInternalNode(node.leftChild, body)
+        body(node)
+        forEachInternalNode(node.rightChild, body)
+    }
+
+    private func leftmostLeafWindowID(_ node: TreeNode?) -> String? {
+        guard let node else { return nil }
+        if let window = node.window { return window.id }
+        return leftmostLeafWindowID(node.leftChild) ?? leftmostLeafWindowID(node.rightChild)
+    }
+
     private func reflow(_ node: TreeNode?, in rect: Rect, gap: Double) {
         guard let node else { return }
         node.rect = rect
@@ -171,6 +238,7 @@ public final class Workspace: @unchecked Sendable {
     /// is fully derived from the ordered list, so a re-tile rebuilds it the
     /// same way each time and window order continues to be preserved.
     public func applyPreset(_ mode: LayoutMode, orderedIDs: [String]) {
+        currentMode = mode
         guard !orderedIDs.isEmpty else {
             root = nil
             return

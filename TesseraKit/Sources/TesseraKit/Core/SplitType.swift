@@ -1,4 +1,4 @@
-public enum SplitType: Equatable, Sendable {
+public enum SplitType: String, Codable, Equatable, Sendable {
     case horizontal
     case vertical
 
