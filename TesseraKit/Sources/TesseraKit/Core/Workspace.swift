@@ -114,6 +114,29 @@ public final class Workspace: @unchecked Sendable {
         return true
     }
 
+    /// Nudge the split ratio of the focused window's parent by `delta`, clamped
+    /// to [config.splitMinRatio, config.splitMaxRatio], and reflow the subtree.
+    /// A POSITIVE `delta` always grows the focused window's share (regardless
+    /// of which side of the split it sits on); negative shrinks.
+    /// Returns false when the focused window has no parent split to resize.
+    @discardableResult
+    public func resizeSplit(delta: Double) -> Bool {
+        guard let currentRoot = root,
+              let focusedID = focusedWindowID,
+              let (_, parent) = findPathToLeaf(currentRoot, windowId: focusedID),
+              let parentNode = parent else { return false }
+
+        let gap = config.gapSize / 2.0
+        let focusedIsFirst = containsWindowID(parentNode.leftChild, windowId: focusedID)
+        let applied = focusedIsFirst ? delta : -delta
+        let current = parentNode.ratio ?? 0.5
+        let clamped = min(max(current + applied, config.splitMinRatio), config.splitMaxRatio)
+        parentNode.ratio = clamped
+        reflow(parentNode, in: parentNode.rect, gap: gap)
+        print("[bsp] resize split → \(clamped) on \(parentNode.rect)")
+        return true
+    }
+
     private func reflow(_ node: TreeNode?, in rect: Rect, gap: Double) {
         guard let node else { return }
         node.rect = rect
@@ -125,12 +148,13 @@ public final class Workspace: @unchecked Sendable {
             return
         }
         let dir = node.splitType ?? .vertical
+        let ratio = node.ratio ?? 0.5
         if dir == .vertical {
-            let split = rect.splitVertical()
+            let split = rect.splitVertical(fraction: ratio)
             reflow(node.leftChild, in: split.left, gap: gap)
             reflow(node.rightChild, in: split.right, gap: gap)
         } else {
-            let split = rect.splitHorizontal()
+            let split = rect.splitHorizontal(fraction: ratio)
             reflow(node.leftChild, in: split.top, gap: gap)
             reflow(node.rightChild, in: split.bottom, gap: gap)
         }
@@ -449,6 +473,15 @@ public final class Workspace: @unchecked Sendable {
             return leftResult
         }
         return findPathToLeaf(node.rightChild, windowId: windowId, parent: node)
+    }
+
+    /// True when the subtree rooted at `node` (directly or transitively) holds
+    /// the window `windowId`.
+    private func containsWindowID(_ node: TreeNode?, windowId: String) -> Bool {
+        guard let node else { return false }
+        if node.isLeaf { return node.window?.id == windowId }
+        return containsWindowID(node.leftChild, windowId: windowId)
+            || containsWindowID(node.rightChild, windowId: windowId)
     }
 
     private func clearFocus(_ node: TreeNode?) {

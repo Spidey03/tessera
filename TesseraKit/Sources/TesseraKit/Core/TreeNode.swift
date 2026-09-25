@@ -5,6 +5,9 @@ public final class TreeNode: @unchecked Sendable {
     public var rightChild: TreeNode?
     public var splitType: SplitType?
     public var isFocused: Bool
+    /// Share of the rect given to the FIRST child (left for vertical, top for
+    /// horizontal). nil = 50/50 (the default). Only meaningful on internal nodes.
+    public var ratio: Double?
 
     public var isLeaf: Bool {
         leftChild == nil && rightChild == nil
@@ -16,7 +19,8 @@ public final class TreeNode: @unchecked Sendable {
         leftChild: TreeNode? = nil,
         rightChild: TreeNode? = nil,
         splitType: SplitType? = nil,
-        isFocused: Bool = false
+        isFocused: Bool = false,
+        ratio: Double? = nil
     ) {
         self.rect = rect
         self.window = window
@@ -24,6 +28,7 @@ public final class TreeNode: @unchecked Sendable {
         self.rightChild = rightChild
         self.splitType = splitType
         self.isFocused = isFocused
+        self.ratio = ratio
     }
 }
 

@@ -114,6 +114,7 @@ final class Daemon: @unchecked Sendable {
         print("  ⌘⌥I/M — focus up/down")
         print("  ⌘⌥F   — toggle fullscreen")
         print("  ⌘⌥Space — toggle split direction")
+        print("  ⌘⌥[ / ⌘⌥] — shrink / grow focused split")
         print("  ⌘⌥.   — cycle layout (bsp → master-stack → columns)")
         print("Listening for keyDown events...")
 
@@ -187,6 +188,10 @@ final class Daemon: @unchecked Sendable {
             toggleFullscreen()
         case "toggleSplit", "toggle-split", "toggleSplitDirection":
             toggleSplitDirection()
+        case "resizeGrow", "resize-grow", "resizeSplit":
+            resizeSplit(delta: tiler.config.splitResizeStep)
+        case "resizeShrink", "resize-shrink":
+            resizeSplit(delta: -tiler.config.splitResizeStep)
         case "cycleLayout", "cycle-layout":
             cycleLayout()
         case let action where action.hasPrefix("setLayout:"):
@@ -530,6 +535,44 @@ final class Daemon: @unchecked Sendable {
             print("[split] focused window has no parent split — nothing to toggle")
             return
         }
+        applyTreeChange(displayID: displayID)
+        print("[split] toggled on display \(displayID)")
+    }
+
+    /// Nudge the focused split ratio. Positive `delta` grows the focused
+    /// window's share (see `Workspace.resizeSplit`). Mirrors the toggle path.
+    func resizeSplit(delta: Double) {
+        guard tiler.layoutMode == .bsp else {
+            print("[split] resize is only supported in bsp mode (current: \(tiler.layoutMode.rawValue))")
+            return
+        }
+        guard let displayID = activeDisplayID() else { print("[split] no displays — tile first"); return }
+        guard let ws = currentWorkspaces[displayID] else { print("[split] no workspace — tile first"); return }
+        guard currentMappers[displayID] != nil else { print("[split] no mapper — tile first"); return }
+
+        observer.isSuppressed = true
+        guard ws.resizeSplit(delta: delta) else {
+            observer.isSuppressed = false
+            print("[split] focused window has no parent split — nothing to resize")
+            return
+        }
+        applyTreeChange(displayID: displayID)
+        print("[split] resized split by \(delta) on display \(displayID)")
+    }
+
+    /// After a workspace tree mutation, recompute the layout and animate (or
+    /// instantly apply) the windows. Expects `observer.isSuppressed` to be
+    /// true already; resets it afterward.
+    private func applyTreeChange(displayID: CGDirectDisplayID) {
+        guard let ws = currentWorkspaces[displayID] else {
+            observer.isSuppressed = false
+            return
+        }
+        guard var mapper = currentMappers[displayID] else {
+            observer.isSuppressed = false
+            return
+        }
+
         let layout = ws.getLayout()
         let screenRect = screenRect(for: displayID)
         let startPositions = mapper.allWindows.reduce(into: [:]) { $0[$1.id] = $1.position }
@@ -541,7 +584,10 @@ final class Daemon: @unchecked Sendable {
                            steps: tiler.config.animationSteps,
                            duration: tiler.config.animationDuration)
         } else {
-            guard var instantMapper = currentMappers[displayID] else { return }
+            guard var instantMapper = currentMappers[displayID] else {
+                observer.isSuppressed = false
+                return
+            }
             for (id, pos) in targets {
                 guard let macWin = instantMapper.window(withID: id) else { continue }
                 var pt = pos
@@ -555,7 +601,6 @@ final class Daemon: @unchecked Sendable {
         }
         observer.isSuppressed = false
         fullscreenWindowID = nil
-        print("[split] toggled on display \(displayID) — \(targets.count) window(s)")
     }
 
     func toggleFullscreen() {

@@ -29,6 +29,7 @@ if CommandLine.arguments.contains("--help") {
       ⌘⌥W          Remove focused window
       ⌘⌥F          Fullscreen toggle
       ⌘⌥Space      Toggle split direction
+      ⌘⌥[ / ⌘⌥]    Shrink / grow focused split
       ⌘⌥⇧Q         Quit daemon
     """)
     exit(0)

@@ -18,6 +18,9 @@ struct TesseraConfigFile: Codable {
     var outerGap: Double?
     var layoutMode: String?
     var masterRatio: Double?
+    var splitResizeStep: Double?
+    var splitMinRatio: Double?
+    var splitMaxRatio: Double?
     var newWindowFocus: Bool?
     var floatingApps: [String]?
     var animationEnabled: Bool?
@@ -82,6 +85,11 @@ enum ConfigLoader {
                 "layoutMode": "bsp",
                 // Fraction of screen width given to the master pane in masterStack.
                 "masterRatio": 0.6,
+                // How much one resize hotkey press (⌘⌥[ / ⌘⌥]) moves a bsp split,
+                // and the range split ratios are clamped to (0…1).
+                "splitResizeStep": 0.10,
+                "splitMinRatio": 0.2,
+                "splitMaxRatio": 0.8,
                 "newWindowFocus": false,
                 // Legacy key: still supported for backward compatibility (auto-migrated to appRules)
                 "floatingApps": ["com.spotify.client"],
@@ -118,6 +126,8 @@ enum ConfigLoader {
                     "focusDown": ["keyCode": 46, "flags": ["cmd", "opt"]],
                     "fullscreen": ["keyCode": 3, "flags": ["cmd", "opt"]],
                     "toggleSplit": ["keyCode": 49, "flags": ["cmd", "opt"]],
+                    "resizeShrink": ["keyCode": 33, "flags": ["cmd", "opt"]],
+                    "resizeGrow": ["keyCode": 30, "flags": ["cmd", "opt"]],
                     "cycleLayout": ["keyCode": 47, "flags": ["cmd", "opt"]],
                     "quit": ["keyCode": 12, "flags": ["cmd", "opt", "shift"]],
                 ],
@@ -150,6 +160,9 @@ enum ConfigLoader {
             outerGap: fc.outerGap ?? defaults.outerGap,
             layoutMode: parseLayoutMode(fc.layoutMode) ?? defaults.layoutMode,
             masterRatio: fc.masterRatio ?? defaults.masterRatio,
+            splitResizeStep: fc.splitResizeStep ?? defaults.splitResizeStep,
+            splitMinRatio: fc.splitMinRatio ?? defaults.splitMinRatio,
+            splitMaxRatio: fc.splitMaxRatio ?? defaults.splitMaxRatio,
             newWindowFocus: fc.newWindowFocus ?? defaults.newWindowFocus,
             floatingAppIDs: fc.floatingApps ?? defaults.floatingAppIDs,
             appRules: mergedAppRules,
@@ -185,6 +198,8 @@ enum ConfigLoader {
             KeyBinding(keyCode: 46, flags: [.maskCommand, .maskAlternate], action: "focusDown"),    // M
             KeyBinding(keyCode: 3, flags: [.maskCommand, .maskAlternate], action: "fullscreen"),
             KeyBinding(keyCode: 49, flags: [.maskCommand, .maskAlternate], action: "toggleSplit"), // Space
+            KeyBinding(keyCode: 33, flags: [.maskCommand, .maskAlternate], action: "resizeShrink"), // [
+            KeyBinding(keyCode: 30, flags: [.maskCommand, .maskAlternate], action: "resizeGrow"),   // ]
             KeyBinding(keyCode: 47, flags: [.maskCommand, .maskAlternate], action: "cycleLayout"), // Period: bsp→master→columns
             KeyBinding(keyCode: 12, flags: [.maskCommand, .maskAlternate, .maskShift], action: "quit"),
         ]

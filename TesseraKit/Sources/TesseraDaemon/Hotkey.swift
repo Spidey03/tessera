@@ -66,4 +66,14 @@ extension KeyBinding {
         flags: [.maskCommand, .maskAlternate],
         action: "fullscreen"
     )
+    static let resizeShrink = KeyBinding(
+        keyCode: 33, // [
+        flags: [.maskCommand, .maskAlternate],
+        action: "resizeShrink"
+    )
+    static let resizeGrow = KeyBinding(
+        keyCode: 30, // ]
+        flags: [.maskCommand, .maskAlternate],
+        action: "resizeGrow"
+    )
 }
