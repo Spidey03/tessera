@@ -44,11 +44,14 @@ final class Daemon: @unchecked Sendable {
     private var fullscreenWindowID: String? = nil
     /// Fingerprints of last known tileable windows per display (appPID + geometry) to skip no-op auto-tiles
     private var lastTileableFingerprints: [CGDirectDisplayID: Set<String>] = [:]
+    /// Where per-display layout overrides are persisted (state.json).
+    private let layoutStateURL: URL
 
-    init(tiler: Tiler, bindings: [KeyBinding]) {
+    init(tiler: Tiler, bindings: [KeyBinding], layoutStateURL: URL = ConfigLoader.statePath) {
         self.tiler = tiler
         self.bindings = bindings
         self.observer = WindowObserver(debounce: 0.05, dragDebounce: 0.25)
+        self.layoutStateURL = layoutStateURL
     }
 
     func run() {
@@ -115,7 +118,7 @@ final class Daemon: @unchecked Sendable {
         print("  ⌘⌥F   — toggle fullscreen")
         print("  ⌘⌥Space — toggle split direction")
         print("  ⌘⌥[ / ⌘⌥] — shrink / grow focused split")
-        print("  ⌘⌥.   — cycle layout (bsp → master-stack → columns)")
+        print("  ⌘⌥.   — cycle layout on the focused display (bsp → master-stack → columns)")
         print("Listening for keyDown events...")
 
         CFRunLoopRun()
@@ -212,14 +215,15 @@ final class Daemon: @unchecked Sendable {
     func reloadConfig() {
         print("[reload] reloading config from disk")
         let loaded = ConfigLoader.load()
-        tiler = Tiler(config: loaded.tesseraConfig)
+        let layoutState = LayoutStateStore.load(from: layoutStateURL)
+        tiler = Tiler(config: loaded.tesseraConfig, layoutState: layoutState)
         bindings = loaded.bindings
         currentWorkspaces = [:]
         currentMappers = [:]
         centeredFloaterIDs = []
         fullscreenWindowID = nil
         lastTileableFingerprints = [:]
-        print("[reload] config reloaded — re-tiling")
+        print("[reload] config reloaded — re-tiling (persisted layout overrides kept)")
         tileWithSuppression()
     }
 
@@ -500,32 +504,52 @@ final class Daemon: @unchecked Sendable {
 
     // MARK: - Layout presets
 
-    /// Cycle the layout mode (bsp → masterStack → columns → bsp) and re-tile
-    /// every display with the new geometry.
+    /// Cycle the layout mode of the ACTIVE display (bsp → masterStack →
+    /// columns → bsp), persist the override, and re-tile every display with
+    /// the new geometry. Other displays keep their own mode.
     func cycleLayout() {
-        tiler.layoutMode = tiler.layoutMode.next()
-        print("[layout] switching to '\(tiler.layoutMode.rawValue)'")
+        guard let displayID = activeDisplayID() else { print("[layout] no displays — tile first"); return }
+        let next = tiler.layoutMode(for: displayID).next()
+        tiler.layoutState.setMode(next, for: displayID)
+        persistLayoutState()
+        print("[layout] display \(displayID): switching to '\(next.rawValue)'")
         tileWithSuppression()
     }
 
-    /// Switch to a specific layout mode by name ("bsp", "masterStack", "columns")
-    /// and re-tile. Unknown names are rejected.
+    /// Switch the ACTIVE display to a specific layout mode by name
+    /// ("bsp", "masterStack", "columns") and re-tile. Unknown names are
+    /// rejected; the override persists for the next run.
     func setLayout(_ raw: String) {
         guard let mode = LayoutMode(rawValue: raw) else {
             print("[layout] unknown layout '\(raw)' — expected bsp, masterStack or columns")
             return
         }
-        tiler.layoutMode = mode
-        print("[layout] switching to '\(mode.rawValue)'")
+        guard let displayID = activeDisplayID() else { print("[layout] no displays — tile first"); return }
+        tiler.layoutState.setMode(mode, for: displayID)
+        persistLayoutState()
+        print("[layout] display \(displayID): switching to '\(mode.rawValue)'")
         tileWithSuppression()
     }
 
+    /// Write the current per-display overrides to state.json (pruned of
+    /// displays that are no longer connected), so layouts survive restarts.
+    private func persistLayoutState() {
+        var state = tiler.layoutState
+        state.prune(liveDisplayIDs: Set(ScreenManager.displays.map(\.id)))
+        do {
+            try LayoutStateStore.save(state, to: layoutStateURL)
+            print("[layout] state persisted to \(layoutStateURL.path)")
+        } catch {
+            print("[layout] WARNING: failed to save layout state: \(error)")
+        }
+    }
+
     func toggleSplitDirection() {
-        guard tiler.layoutMode == .bsp else {
-            print("[split] toggle is only supported in bsp mode (current: \(tiler.layoutMode.rawValue))")
+        guard let displayID = activeDisplayID() else { print("[split] no displays — tile first"); return }
+        guard tiler.layoutMode(for: displayID) == .bsp else {
+            print("[split] toggle is only supported in bsp mode (current: \(tiler.layoutMode(for: displayID).rawValue))")
             return
         }
-        guard let displayID = activeDisplayID() else { print("[split] no displays — tile first"); return }
         guard let ws = currentWorkspaces[displayID] else { print("[split] no workspace — tile first"); return }
         guard var mapper = currentMappers[displayID] else { print("[split] no mapper — tile first"); return }
 
@@ -542,11 +566,11 @@ final class Daemon: @unchecked Sendable {
     /// Nudge the focused split ratio. Positive `delta` grows the focused
     /// window's share (see `Workspace.resizeSplit`). Mirrors the toggle path.
     func resizeSplit(delta: Double) {
-        guard tiler.layoutMode == .bsp else {
-            print("[split] resize is only supported in bsp mode (current: \(tiler.layoutMode.rawValue))")
+        guard let displayID = activeDisplayID() else { print("[split] no displays — tile first"); return }
+        guard tiler.layoutMode(for: displayID) == .bsp else {
+            print("[split] resize is only supported in bsp mode (current: \(tiler.layoutMode(for: displayID).rawValue))")
             return
         }
-        guard let displayID = activeDisplayID() else { print("[split] no displays — tile first"); return }
         guard let ws = currentWorkspaces[displayID] else { print("[split] no workspace — tile first"); return }
         guard currentMappers[displayID] != nil else { print("[split] no mapper — tile first"); return }
 

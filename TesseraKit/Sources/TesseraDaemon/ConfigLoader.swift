@@ -42,9 +42,12 @@ struct LoadedConfig {
 // MARK: - Loader
 
 enum ConfigLoader {
-    private static let configDir = FileManager.default.homeDirectoryForCurrentUser
+    /// Directory holding config.json, state.json, and (optionally) the example config.
+    static let configDir = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".config/tessera")
     private static let configPath = configDir.appendingPathComponent("config.json")
+    /// Per-display layout state persisted by the daemon (see LayoutState).
+    static let statePath = configDir.appendingPathComponent("state.json")
 
     static func load() -> LoadedConfig {
         let fileConfig: TesseraConfigFile?
@@ -81,7 +84,8 @@ enum ConfigLoader {
                 "gapSize": 8.0,
                 "outerGap": 4.0,
                 // Layout algorithm applied at startup: bsp | masterStack | columns.
-                // Cycle live with the cycleLayout hotkey (or "cycleLayout" IPC action).
+                // This is the DEFAULT for every display; per-display overrides
+                // (via the cycleLayout hotkey / "setLayout" IPC) persist to state.json.
                 "layoutMode": "bsp",
                 // Fraction of screen width given to the master pane in masterStack.
                 "masterRatio": 0.6,

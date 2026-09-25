@@ -14,13 +14,20 @@ struct DisplayTileResult {
 
 struct Tiler {
     let config: TesseraConfig
-    /// The layout algorithm applied at tile time. Starts from `config.layoutMode`
-    /// and can be cycled at runtime (hotkey/IPC); reset on config reload.
-    var layoutMode: LayoutMode
 
-    init(config: TesseraConfig) {
+    /// Per-display layout overrides. Displays without an override use
+    /// `config.layoutMode`. Loaded from `state.json` at boot and persisted on
+    /// change (see `Daemon.persistLayoutState`).
+    var layoutState: LayoutState
+
+    init(config: TesseraConfig, layoutState: LayoutState = LayoutState()) {
         self.config = config
-        self.layoutMode = config.layoutMode
+        self.layoutState = layoutState
+    }
+
+    /// Effective layout mode for a display: override, else the config default.
+    func layoutMode(for displayID: CGDirectDisplayID) -> LayoutMode {
+        layoutState.mode(for: displayID, fallback: config.layoutMode)
     }
 
     /// Tiles every display's windows into its own BSP workspace.
@@ -107,7 +114,7 @@ struct Tiler {
 
         // Build the display tree with only tiled windows, using the active
         // layout mode (bsp, masterStack or columns).
-        let workspace = makeWorkspace(ordered: orderedTiledIDs, screenRect: screenRect)
+        let workspace = makeWorkspace(displayID: display.id, ordered: orderedTiledIDs, screenRect: screenRect)
 
         let layout = workspace.getLayout()
         print("[tiler]   layout has \(layout.count) entries:")
@@ -130,7 +137,7 @@ struct Tiler {
                 print("[tiler]   all remaining windows overflowed — giving up")
                 break
             }
-            resultWorkspace = makeWorkspace(ordered: remainingOrdered, screenRect: screenRect)
+            resultWorkspace = makeWorkspace(displayID: display.id, ordered: remainingOrdered, screenRect: screenRect)
             let newLayout = resultWorkspace.getLayout()
             if newLayout.isEmpty { break }
             (targets, floated) = mapper.computeLayout(newLayout, screenRect: screenRect)
@@ -150,11 +157,11 @@ struct Tiler {
         )
     }
 
-    /// Fresh tree for `orderedIDs` under the active layout mode. Windows keep
-    /// their previous slots because order is preserved by the caller.
-    private func makeWorkspace(ordered orderedTiledIDs: [String], screenRect: Rect) -> Workspace {
+    /// Fresh tree for `orderedIDs` under the display's effective layout mode.
+    /// Windows keep their previous slots because order is preserved by the caller.
+    private func makeWorkspace(displayID: CGDirectDisplayID, ordered orderedTiledIDs: [String], screenRect: Rect) -> Workspace {
         let workspace = Workspace(monitorRect: screenRect, config: config)
-        workspace.applyPreset(layoutMode, orderedIDs: orderedTiledIDs)
+        workspace.applyPreset(layoutMode(for: displayID), orderedIDs: orderedTiledIDs)
         return workspace
     }
 
