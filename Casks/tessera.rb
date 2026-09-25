@@ -4,13 +4,15 @@ cask "tessera" do
 
   url "https://github.com/Spidey03/tessera/releases/download/v#{version}/tessera-#{version}.dmg"
   name "Tessera"
-  desc "BSP tiling window manager for macOS (menu bar app + daemon)"
+  desc "BSP tiling window manager (menu bar app + daemon)"
   homepage "https://github.com/Spidey03/tessera"
 
   livecheck do
     url :url
     strategy :github_latest
   end
+
+  depends_on :macos
 
   app "Tessera.app"
 
