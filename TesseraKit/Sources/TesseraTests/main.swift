@@ -1212,6 +1212,53 @@ func testHotkeyCanonicalActionsCoverDefaults() throws {
     try assertEqual(HotkeyBindings.canonicalActions.count, 14)
 }
 
+// MARK: - Update model (ReleaseVersion / UpdateAppcast)
+
+func testVersionCompareAcceptsAlphanumericComponents() throws {
+    try assert(ReleaseVersion.isNewer("v0.5.0", than: "0.4.0"))
+    try assert(ReleaseVersion.isNewer("0.5", than: "v0.4.9"))
+    try assert(ReleaseVersion.isNewer("1.0.0", than: "0.99.99"))
+    try assert(!ReleaseVersion.isNewer("0.4.0", than: "v0.4.0"))
+    try assert(!ReleaseVersion.isNewer("v0.4.0", than: "0.4.0"))
+    try assert(!ReleaseVersion.isNewer("0.3.9", than: "0.4.0"))
+    try assert(!ReleaseVersion.isNewer("0.4.0-beta1", than: "0.4.0")) // prerelease < release
+}
+
+func testVersionCompareShorterForms() throws {
+    try assert(ReleaseVersion.isNewer("0.5", than: "0.4"))
+    try assertEqual(ReleaseVersion.compare("0.5", "0.5.0"), 0)
+    try assertEqual(ReleaseVersion.compare("v1", "0.1.0"), 1)
+    try assertEqual(ReleaseVersion.compare("0.4.0", "0.4"), 0)
+}
+
+func testAppcastParseReturnsNewer() throws {
+    let appcast = """
+    {"version":"0.5.0","tag":"v0.5.0","url":"https://example.com/x.zip","sha256":"abc","size":1234567}
+    """.data(using: .utf8)!
+    let info = try UpdateAppcast.parse(appcast, currentVersion: "0.4.0")
+    try assert(info != nil, "expected an update to be reported")
+    try assertEqual(info?.version, "0.5.0")
+    try assertEqual(info?.size, 1234567)
+}
+
+func testAppcastParseNilWhenOlderOrEqual() throws {
+    let appcast = """
+    {"version":"0.4.0","tag":"v0.4.0","url":"https://example.com/x.zip","sha256":"abc","size":1}
+    """.data(using: .utf8)!
+    try assertNil(try UpdateAppcast.parse(appcast, currentVersion: "0.4.0"))
+    try assertNil(try UpdateAppcast.parse(appcast, currentVersion: "0.5.0"))
+}
+
+func testAppcastParseThrowsOnMalformedData() throws {
+    let bad = "{not json".data(using: .utf8)!
+    do {
+        _ = try UpdateAppcast.parse(bad, currentVersion: "0.4.0")
+        throw TestError.assertionFailed("expected decode failure")
+    } catch is DecodingError {
+        // expected
+    }
+}
+
 // MARK: - Runner
 
 let tests: [(String, () throws -> Void)] = [
@@ -1333,6 +1380,12 @@ let tests: [(String, () throws -> Void)] = [
     ("Hotkey key symbols", testHotkeyKeySymbols),
     ("Hotkey display uses canonical modifier order", testHotkeyDisplayUsesCanonicalModifierOrder),
     ("Hotkey canonical actions cover defaults", testHotkeyCanonicalActionsCoverDefaults),
+    // Update model
+    ("Version compare accepts alphanumeric components", testVersionCompareAcceptsAlphanumericComponents),
+    ("Version compare handles shorter forms", testVersionCompareShorterForms),
+    ("Appcast parse returns newer release", testAppcastParseReturnsNewer),
+    ("Appcast parse nil when older or equal", testAppcastParseNilWhenOlderOrEqual),
+    ("Appcast parse throws on malformed data", testAppcastParseThrowsOnMalformedData),
 ]
 
 var passed = 0

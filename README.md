@@ -204,6 +204,19 @@ brew install --build-from-source /tmp/Tessera.rb
 4. Set that `sha256` in `Formula/tessera.rb` (keep the release-asset `url`), commit, push.
 5. Reinstall via the tap to confirm the released artifact builds and runs.
 
+### Updates
+
+The menu bar app includes a built-in updater: **Check for Updates…** (under the
+menu icon) queries the latest GitHub release and, when newer, offers
+**Install & Restart**; **Automatically Check for Updates** (default on) does the
+same shortly after launch. The updater reads the release's `appcast.json` asset
+(version, download URL, sha256, size), downloads `tessera-<version>-dist.zip`,
+extracts it into `~/Library/Application Support/Tessera`, and restarts the
+daemon + menu from the new bundle. Both artifacts are produced unconditionally
+by `scripts/build_release.sh`; attach `tessera-<version>-dist.zip` and
+`appcast.json` to the release alongside the archive and DMG when cutting a
+version.
+
 ### Hotkeys
 
 | Shortcut | Action |

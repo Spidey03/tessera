@@ -14,6 +14,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let reloadItem = NSMenuItem(title: "Reload Config", action: #selector(reloadConfig), keyEquivalent: "")
     private let cycleLayoutItem = NSMenuItem(title: "Cycle Layout", action: #selector(cycleLayout), keyEquivalent: "")
     private let startAtLoginItem = NSMenuItem(title: "Start at Login", action: #selector(toggleStartAtLogin), keyEquivalent: "")
+    private let checkForUpdatesItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+    private let autoCheckItem = NSMenuItem(title: "Automatically Check for Updates", action: #selector(toggleAutoCheck), keyEquivalent: "")
+    private let versionItem = NSMenuItem(title: "Tessera \(tesseraMenuVersion)", action: nil, keyEquivalent: "")
+    private let updates = AutoUpdater()
 
     init(control: DaemonControl) {
         self.control = control
@@ -55,6 +59,12 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         }
         permItem.submenu = permMenu
         menu.addItem(permItem)
+
+        menu.addItem(.separator())
+        checkForUpdatesItem.target = self
+        autoCheckItem.target = self
+        menu.addItem(checkForUpdatesItem)
+        menu.addItem(autoCheckItem)
         menu.addItem(.separator())
 
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
@@ -75,7 +85,6 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.addItem(quitItem)
         menu.addItem(.separator())
 
-        let versionItem = NSMenuItem(title: "Tessera \(tesseraMenuVersion)", action: nil, keyEquivalent: "")
         versionItem.isEnabled = false
         menu.addItem(versionItem)
 
@@ -103,6 +112,17 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         startStopItem.isEnabled = true
         startAtLoginItem.state = control.isStartAtLoginEnabled ? .on : .off
         statusItem.button?.toolTip = running ? "Tessera — running" : "Tessera — stopped"
+
+        autoCheckItem.state = updates.automaticChecksEnabled ? .on : .off
+        versionItem.title = updates.pendingUpdate != nil
+            ? "Tessera \(tesseraMenuVersion) — update v\(updates.pendingUpdate!.version) available"
+            : "Tessera \(tesseraMenuVersion)"
+    }
+
+    /// Run a background update check shortly after launch (when enabled) and
+    /// again each time the menu opens (throttled by the in-flight guard).
+    func startAutomaticUpdateChecks() {
+        updates.startAutomaticCheck()
     }
 
     // MARK: - Actions
@@ -161,5 +181,14 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     @objc private func quitMenuBarApp() {
         NSApp.terminate(nil)
+    }
+
+    @objc private func checkForUpdates() {
+        updates.checkNow()
+    }
+
+    @objc private func toggleAutoCheck() {
+        updates.automaticChecksEnabled.toggle()
+        autoCheckItem.state = updates.automaticChecksEnabled ? .on : .off
     }
 }
