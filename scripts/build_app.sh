@@ -42,6 +42,7 @@ cp "$ROOT_DIR/TesseraKit/.build/release/TesseraMenu" "$MACOS/TesseraMenu"
 cp "$ROOT_DIR/TesseraKit/.build/release/TesseraDaemon" "$MACOS/TesseraDaemon"
 chmod +x "$MACOS/TesseraMenu" "$MACOS/TesseraDaemon"
 cp "$ROOT_DIR/scripts/auth_start.zsh" "$RESOURCES/auth_start.zsh"
+cp "$ROOT_DIR/Resources/Tessera.icns" "$RESOURCES/Tessera.icns"
 
 cat > "$CONTENTS/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -58,6 +59,8 @@ cat > "$CONTENTS/Info.plist" <<PLIST
     <string>TesseraMenu</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
+    <key>CFBundleIconFile</key>
+    <string>Tessera</string>
     <key>CFBundleVersion</key>
     <string>$VERSION</string>
     <key>CFBundleShortVersionString</key>

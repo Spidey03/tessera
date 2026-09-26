@@ -1,4 +1,5 @@
 import AppKit
+import TesseraUI
 
 /// Builds and manages the status item + menu. Re-renders state whenever the
 /// daemon starts/stops or the menu is about to open.
@@ -21,12 +22,15 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     init(control: DaemonControl) {
         self.control = control
-        self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        // Not NSStatusItem.squareLength: at 22 pt the 13 pt glyph sat behind
+        // 4.5 pt of dead space on each side. The length has to stay at or above
+        // TesseraMenuIcon.statusItemCanvas or the image gets scaled down to fit.
+        self.statusItem = NSStatusBar.system.statusItem(withLength: TesseraMenuIcon.statusItemLength)
 
         super.init()
 
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "square.split.2x2", accessibilityDescription: "Tessera")
+            button.image = TesseraMenuIcon.statusImage()
             button.imagePosition = .imageOnly
             button.toolTip = "Tessera"
         }
@@ -102,8 +106,13 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     private func refresh() {
         let running = control.isRunning
-        let color: NSColor = running ? .systemGreen : .systemGray
-        statusItem.button?.contentTintColor = color
+        // Deliberately no `contentTintColor` here: a tint replaces the menu
+        // bar's automatic foreground, so the glyph would stop switching with a
+        // wallpaper-following menu bar and look out of place next to the
+        // monochrome icons beside it. `appearsDisabled` gives the stopped
+        // state the system's own dimmed treatment in light and dark alike,
+        // while leaving the item fully clickable.
+        statusItem.button?.appearsDisabled = !running
 
         tileItem.isEnabled = running
         reloadItem.isEnabled = running

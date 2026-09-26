@@ -1,7 +1,9 @@
+import AppKit
 import CoreGraphics
 import Foundation
 import TesseraKit
 import TesseraSystem
+import TesseraUI
 
 // MARK: - Local KeyBinding (duplicated from TesseraDaemon for testability)
 
@@ -1417,7 +1419,142 @@ let tests: [(String, () throws -> Void)] = [
     ("Appcast parse returns newer release", testAppcastParseReturnsNewer),
     ("Appcast parse nil when older or equal", testAppcastParseNilWhenOlderOrEqual),
     ("Appcast parse throws on malformed data", testAppcastParseThrowsOnMalformedData),
+    ("Menu bar glyph ink matches Apple metrics", testMenuBarGlyphInkMatchesAppleMetrics),
+    ("Status item is not wider than the glyph it shows", testStatusItemIsNotWiderThanTheGlyphItDisplays),
+    ("Menu bar glyph is a template with 1x and 2x reps", testMenuBarGlyphIsTemplateWithBothScales),
+    ("Menu bar glyph gutters survive 1x rasterisation", testMenuBarGlyphGapsSurviveRasterisation),
+    ("Glyph proportions hold across canvas sizes", testGlyphProportionsHoldAcrossCanvasSizes),
 ]
+
+
+// MARK: - Menu bar glyph metrics
+
+/// Measures the ink inside a rendered `NSImage` representation, in points.
+/// Deliberately goes through the real `NSImage` reps rather than re-drawing:
+/// the regression this guards against was in the rep rasterisation path.
+func renderedInk(of image: NSImage, pointSize: CGFloat, scale: Int) -> (box: CGRect, coverage: Double)? {
+    let pixels = Int(pointSize * CGFloat(scale))
+    guard let rep = image.representations.first(where: { $0.pixelsWide == pixels }),
+          let cg = rep.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+    var bytes = [UInt8](repeating: 0, count: pixels * pixels * 4)
+    guard let context = CGContext(data: &bytes, width: pixels, height: pixels,
+                                  bitsPerComponent: 8, bytesPerRow: pixels * 4,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+    else { return nil }
+    context.draw(cg, in: CGRect(x: 0, y: 0, width: pixels, height: pixels))
+
+    var minX = pixels, maxX = -1, minY = pixels, maxY = -1, lit = 0
+    for y in 0..<pixels {
+        for x in 0..<pixels where bytes[(y * pixels + x) * 4 + 3] > 128 {
+            minX = min(minX, x); maxX = max(maxX, x)
+            minY = min(minY, y); maxY = max(maxY, y)
+            lit += 1
+        }
+    }
+    guard maxX >= 0 else { return nil }
+    let unit = CGFloat(scale)
+    return (CGRect(x: CGFloat(minX) / unit, y: CGFloat(pixels - maxY - 1) / unit,
+                   width: CGFloat(maxX - minX + 1) / unit, height: CGFloat(maxY - minY + 1) / unit),
+            Double(lit) / Double(pixels * pixels))
+}
+
+/// The glyph used to be rasterised 1:1 into a 2x buffer, so the status item
+/// showed a 6 pt smudge in the bottom-left corner of an 18 pt canvas instead of
+/// a 15 pt glyph. These tests pin the optical metrics so that cannot regress.
+func testMenuBarGlyphInkMatchesAppleMetrics() throws {
+    guard let measured = renderedInk(of: TesseraMenuIcon.statusImage(), pointSize: 18, scale: 2) else {
+        throw TestError.assertionFailed("glyph produced no ink")
+    }
+    let ink = TesseraGlyphInk(box: measured.box, coverage: measured.coverage)
+    try assert(abs(ink.box.height - 13) < 0.5,
+               "expected ~13 pt of ink, got \(ink.box.height)")
+    try assert(abs(ink.box.width - 13) < 0.5,
+               "expected ~13 pt of ink width, got \(ink.box.width)")
+    try assert(ink.box.minX > 1.0 && ink.box.maxX < 17.0,
+               "ink not horizontally centred: \(ink.box)")
+    try assert(ink.box.minY > 1.0 && ink.box.maxY < 17.0,
+               "ink not vertically centred: \(ink.box)")
+    try assert(ink.coverage > 0.30 && ink.coverage < 0.38,
+               "ink coverage \(ink.coverage) is off a 2x2 filled block")
+}
+
+func testStatusItemIsNotWiderThanTheGlyphItDisplays() throws {
+    // A status item narrower than its image makes AppKit scale the image down,
+    // which would quietly undo the optical sizing.
+    try assert(TesseraMenuIcon.statusItemLength >= TesseraMenuIcon.statusItemCanvas,
+               "status item length \(TesseraMenuIcon.statusItemLength) is narrower than the "
+               + "\(TesseraMenuIcon.statusItemCanvas) pt canvas")
+    guard let ink = renderedInk(of: TesseraMenuIcon.statusImage(),
+                                pointSize: TesseraMenuIcon.statusItemCanvas, scale: 2) else {
+        throw TestError.assertionFailed("glyph produced no ink")
+    }
+    try assert(ink.box.width <= TesseraMenuIcon.statusItemLength,
+               "ink \(ink.box.width) pt is wider than the \(TesseraMenuIcon.statusItemLength) pt item")
+    let air = (TesseraMenuIcon.statusItemLength - ink.box.width) / 2
+    try assert(air <= 3.0, "\(air) pt of dead space either side of the glyph")
+}
+
+func testMenuBarGlyphIsTemplateWithBothScales() throws {
+    let image = TesseraMenuIcon.statusImage()
+    try assert(image.isTemplate, "status glyph must be a template image")
+    let widths = Set(image.representations.map(\.pixelsWide))
+    try assert(widths.contains(18), "missing 1x representation: \(widths.sorted())")
+    try assert(widths.contains(36), "missing 2x representation: \(widths.sorted())")
+}
+
+func testMenuBarGlyphGapsSurviveRasterisation() throws {
+    // 1 pt gutters antialiased shut at 1x, turning four tiles into one solid
+    // square; the horizontal and vertical gutters must stay clear at 1x.
+    let canvas: CGFloat = 18
+    let pixels = Int(canvas)
+    var bytes = [UInt8](repeating: 0, count: pixels * pixels * 4)
+    guard let context = CGContext(data: &bytes, width: pixels, height: pixels,
+                                  bitsPerComponent: 8, bytesPerRow: pixels * 4,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+    else { throw TestError.assertionFailed("could not rasterise glyph") }
+    NSGraphicsContext.saveGraphicsState()
+    NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
+    TesseraMenuIcon.drawTiles(in: NSRect(x: 0, y: 0, width: canvas, height: canvas),
+                              metrics: .menuBar, color: .black)
+    NSGraphicsContext.restoreGraphicsState()
+
+    func isInk(_ x: Int, _ y: Int) -> Bool {
+        bytes[(y * pixels + x) * 4 + 3] > 128
+    }
+    let centre = pixels / 2
+    // Walk the vertical gutter above the centre: it must be blank for >= 1.5 pt.
+    var clearRun = 0
+    var bestRun = 0
+    for y in stride(from: centre + 1, to: 0, by: -1) {
+        if isInk(centre, y) { break }
+        clearRun += 1
+        bestRun = max(bestRun, clearRun)
+    }
+    try assert(Double(bestRun) >= 1.5, "vertical gutter only \(bestRun) px clear at 1x")
+    clearRun = 0
+    bestRun = 0
+    for x in stride(from: centre + 1, to: 0, by: -1) {
+        if isInk(x, centre) { break }
+        clearRun += 1
+        bestRun = max(bestRun, clearRun)
+    }
+    try assert(Double(bestRun) >= 1.5, "horizontal gutter only \(bestRun) px clear at 1x")
+}
+
+func testGlyphProportionsHoldAcrossCanvasSizes() throws {
+    guard let menu = renderedInk(of: TesseraMenuIcon.statusImage(), pointSize: 18, scale: 2),
+          let header = renderedInk(of: TesseraMenuIcon.settingsHeaderImage(), pointSize: 40, scale: 2) else {
+        throw TestError.assertionFailed("glyph produced no ink")
+    }
+    let menuFraction = menu.box.height / 18
+    let headerFraction = header.box.height / 40
+    try assert(abs(menuFraction - headerFraction) < 0.02,
+               "menu bar \(menuFraction) and header \(headerFraction) glyphs differ in proportion")
+    try assert(!TesseraMenuIcon.settingsHeaderImage().isTemplate,
+               "the Settings header glyph is decorative, not a template")
+}
 
 var passed = 0
 var failed: [(String, Error)] = []
