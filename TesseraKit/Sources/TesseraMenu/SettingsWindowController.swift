@@ -1,4 +1,5 @@
 import AppKit
+import TesseraUI
 import TesseraKit
 
 /// Modal-ish settings window editing `~/.config/tessera/config.json`.
@@ -29,6 +30,12 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private var recordingAction: String?
 
     private let statusLabel = NSTextField(labelWithString: "")
+    private var appPicker: AppPickerWindowController?
+
+    /// Root column of the settings window. Kept as a property because
+    /// NSVisualEffectView does not derive its `fittingSize` from subviews, so
+    /// the window is sized from this stack (see `padWindowHeight()`).
+    private let rootStack = NSStackView()
 
     private let allRules: [AppTilingRule] = [.normal, .ignore, .float, .sticky]
 
@@ -54,7 +61,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         self.daemonControl = daemonControl
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 460, height: 0),
+            contentRect: NSRect(x: 0, y: 0, width: 468, height: 640),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -88,34 +95,69 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     // MARK: - Layout
 
     private func buildContentView() -> NSView {
-        let root = NSStackView()
+        let effect = NSVisualEffectView()
+        effect.material = .underWindowBackground
+        effect.blendingMode = .behindWindow
+        effect.state = .active
+        effect.translatesAutoresizingMaskIntoConstraints = false
+
+        let root = rootStack
         root.orientation = .vertical
         root.alignment = .leading
         root.spacing = 10
-        root.edgeInsets = NSEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
-
-        let grid = NSGridView(views: [
-            [NSTextField(labelWithString: "Gap between windows (px):"), gapSizeField],
-            [NSTextField(labelWithString: "Outer gap (px):"), outerGapField],
-            [NSTextField(labelWithString: "Animation steps:"), animationStepsField],
-            [NSTextField(labelWithString: "Animation duration (s):"), animationDurationField],
+        root.edgeInsets = NSEdgeInsets(top: 18, left: 20, bottom: 16, right: 20)
+        root.translatesAutoresizingMaskIntoConstraints = false
+        effect.addSubview(root)
+        NSLayoutConstraint.activate([
+            root.topAnchor.constraint(equalTo: effect.topAnchor),
+            root.leadingAnchor.constraint(equalTo: effect.leadingAnchor),
+            root.trailingAnchor.constraint(equalTo: effect.trailingAnchor),
+            root.bottomAnchor.constraint(equalTo: effect.bottomAnchor),
         ])
-        for field in [gapSizeField, outerGapField, animationStepsField, animationDurationField] {
-            field.widthAnchor.constraint(equalToConstant: 120).isActive = true
-        }
-        root.addArrangedSubview(grid)
+
+        let title = NSTextField(labelWithString: "Tessera")
+        title.font = NSFont.systemFont(ofSize: 17, weight: .semibold)
+        let subtitle = NSTextField(labelWithString: "Tile your windows — changes apply on Save.")
+        subtitle.font = NSFont.systemFont(ofSize: 12)
+        subtitle.textColor = .secondaryLabelColor
+        let headerText = NSStackView(views: [title, subtitle])
+        headerText.orientation = .vertical
+        headerText.alignment = .leading
+        headerText.spacing = 2
+        let header = NSStackView(views: [NSImageView(image: TesseraMenuIcon.settingsHeaderImage()), headerText])
+        header.orientation = .horizontal
+        header.spacing = 12
+        header.alignment = .centerY
+        root.addArrangedSubview(header)
+        root.setCustomSpacing(18, after: header)
+
+        root.addArrangedSubview(sectionHeader("Tiling"))
+
+        root.addArrangedSubview(fieldRow("Gap between windows (px):", gapSizeField))
+        let outerGapRow = fieldRow("Outer gap (px):", outerGapField)
+        root.addArrangedSubview(outerGapRow)
+        root.setCustomSpacing(10, after: outerGapRow)
 
         newWindowFocusCheck.target = self
-        animationEnabledCheck.target = self
-        root.addArrangedSubview(newWindowFocusCheck)
-        root.addArrangedSubview(animationEnabledCheck)
-        root.setCustomSpacing(14, after: animationEnabledCheck)
+        let focusRow = checkboxRow(newWindowFocusCheck)
+        root.addArrangedSubview(focusRow)
+        root.setCustomSpacing(18, after: focusRow)
 
-        root.addArrangedSubview(sectionLabel("Per-app tiling rules"))
+        root.addArrangedSubview(sectionHeader("Animation"))
+
+        animationEnabledCheck.target = self
+        root.addArrangedSubview(checkboxRow(animationEnabledCheck))
+        root.addArrangedSubview(fieldRow("Steps:", animationStepsField))
+        let durationRow = fieldRow("Duration (s):", animationDurationField)
+        root.addArrangedSubview(durationRow)
+        root.setCustomSpacing(18, after: durationRow)
+
+        root.addArrangedSubview(sectionHeader("Per-app tiling rules"))
 
         rulesStack.orientation = .vertical
         rulesStack.alignment = .leading
         rulesStack.spacing = 6
+        rulesStack.edgeInsets = NSEdgeInsets(top: 4, left: 6, bottom: 6, right: 6)
         rulesStack.translatesAutoresizingMaskIntoConstraints = false
         let scroll = NSScrollView()
         scroll.documentView = rulesStack
@@ -126,22 +168,29 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             rulesStack.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
             rulesStack.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
             rulesStack.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
-            scroll.heightAnchor.constraint(equalToConstant: 150),
+            // 4 rows at the fixed 22 pt row height + 6 pt spacing, plus the
+            // stack's 4/6 pt insets — an exact multiple of the row pitch, so
+            // the list never rests on a half-drawn row.
+            scroll.heightAnchor.constraint(equalToConstant: 122),
             scroll.widthAnchor.constraint(equalToConstant: 428),
         ])
         root.addArrangedSubview(scroll)
 
         let addButton = NSButton(title: "+ Add Rule", target: self, action: #selector(addRule))
+        addButton.bezelStyle = .rounded
+        addButton.controlSize = .small
         let rowButtons = NSStackView(views: [addButton])
         rowButtons.orientation = .horizontal
         rowButtons.spacing = 8
         root.addArrangedSubview(rowButtons)
+        root.setCustomSpacing(18, after: rowButtons)
 
-        root.addArrangedSubview(sectionLabel("Hotkeys"))
+        root.addArrangedSubview(sectionHeader("Hotkeys"))
 
         hotkeyStack.orientation = .vertical
         hotkeyStack.alignment = .leading
         hotkeyStack.spacing = 4
+        hotkeyStack.edgeInsets = NSEdgeInsets(top: 4, left: 6, bottom: 6, right: 6)
         hotkeyStack.translatesAutoresizingMaskIntoConstraints = false
         let hotkeyScroll = NSScrollView()
         hotkeyScroll.documentView = hotkeyStack
@@ -152,38 +201,68 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             hotkeyStack.leadingAnchor.constraint(equalTo: hotkeyScroll.contentView.leadingAnchor),
             hotkeyStack.topAnchor.constraint(equalTo: hotkeyScroll.contentView.topAnchor),
             hotkeyStack.widthAnchor.constraint(equalTo: hotkeyScroll.contentView.widthAnchor),
-            hotkeyScroll.heightAnchor.constraint(equalToConstant: 220),
+            // 9 rows at the fixed 20 pt row height + 4 pt spacing, plus insets.
+            hotkeyScroll.heightAnchor.constraint(equalToConstant: 226),
             hotkeyScroll.widthAnchor.constraint(equalToConstant: 428),
         ])
         root.addArrangedSubview(hotkeyScroll)
+        root.setCustomSpacing(14, after: hotkeyScroll)
 
         let saveButton = NSButton(title: "Save & Reload", target: self, action: #selector(save))
         saveButton.keyEquivalent = "\r"
         saveButton.bezelStyle = .rounded
         statusLabel.textColor = .secondaryLabelColor
+        statusLabel.lineBreakMode = .byTruncatingTail
         let bottom = NSStackView(views: [saveButton, statusLabel])
         bottom.orientation = .horizontal
         bottom.spacing = 12
         bottom.alignment = .centerY
         root.addArrangedSubview(bottom)
 
-        return root
+        return effect
     }
 
-    private func sectionLabel(_ text: String) -> NSTextField {
+    /// Rounded capsule behind a section title.
+    private func sectionHeader(_ text: String) -> NSView {
+        SectionChip(title: text)
+    }
+
+    /// A right-aligned control row (macOS settings style): label left, rounded
+    /// input pinned to the content column's right edge.
+    private func fieldRow(_ text: String, _ field: NSTextField, width: CGFloat = 120) -> NSView {
         let label = NSTextField(labelWithString: text)
-        label.font = NSFont.boldSystemFont(ofSize: 12)
-        label.textColor = .secondaryLabelColor
-        return label
+        label.font = NSFont.systemFont(ofSize: 13)
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        let input = RoundedTextInput(wrapping: field,
+                                     font: .monospacedDigitSystemFont(ofSize: 13, weight: .regular))
+        input.widthAnchor.constraint(equalToConstant: width).isActive = true
+
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+        let row = NSStackView(views: [label, spacer, input])
+        row.orientation = .horizontal
+        row.spacing = 8
+        row.alignment = .centerY
+        row.translatesAutoresizingMaskIntoConstraints = false
+        row.widthAnchor.constraint(equalToConstant: 428).isActive = true
+        return row
+    }
+
+    /// A full-width checkbox row so its label sits at the left column edge.
+    private func checkboxRow(_ check: NSButton) -> NSView {
+        check.font = NSFont.systemFont(ofSize: 13)
+        check.translatesAutoresizingMaskIntoConstraints = false
+        check.widthAnchor.constraint(equalToConstant: 428).isActive = true
+        return check
     }
 
     /// Grow the window to fit content after building (auto layout has no fixed height).
     private func padWindowHeight() {
         window?.layoutIfNeeded()
-        if let content = window?.contentView {
-            let height = content.fittingSize.height + 4
-            window?.setContentSize(NSSize(width: 480, height: height))
-        }
+        let fitting = rootStack.fittingSize
+        window?.setContentSize(NSSize(width: max(468, fitting.width), height: fitting.height + 4))
     }
 
     // MARK: - Data <-> UI
@@ -244,6 +323,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             let row = NSStackView(views: [title, comboButton, resetButton])
             row.orientation = .horizontal
             row.spacing = 8
+            row.alignment = .centerY
+            row.translatesAutoresizingMaskIntoConstraints = false
+            row.heightAnchor.constraint(equalToConstant: 20).isActive = true
             hotkeyStack.addArrangedSubview(row)
             hotkeyRows.append(HotkeyRow(action: action, comboButton: comboButton, resetButton: resetButton))
         }
@@ -336,7 +418,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private func addRuleRow(bundleID: String, rule: AppTilingRule) {
         let field = NSTextField(string: bundleID)
         field.placeholderString = "com.example.app"
-        field.widthAnchor.constraint(equalToConstant: 220).isActive = true
+        let input = RoundedTextInput(wrapping: field)
+        input.widthAnchor.constraint(equalToConstant: 220).isActive = true
 
         let popup = NSPopUpButton()
         for r in allRules {
@@ -349,9 +432,12 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         removeButton.bezelStyle = .rounded
         removeButton.tag = ruleRows.count
 
-        let row = NSStackView(views: [field, popup, removeButton])
+        let row = NSStackView(views: [input, popup, removeButton])
         row.orientation = .horizontal
         row.spacing = 8
+        row.alignment = .centerY
+        row.translatesAutoresizingMaskIntoConstraints = false
+        row.heightAnchor.constraint(equalToConstant: 22).isActive = true
         rulesStack.addArrangedSubview(row)
         ruleRows.append((field: field, popup: popup))
         for i in 0..<ruleRows.count {
@@ -362,7 +448,15 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     }
 
     @objc private func addRule() {
-        addRuleRow(bundleID: "", rule: .normal)
+        guard let parent = window else { return }
+        if appPicker == nil {
+            let picker = AppPickerWindowController()
+            picker.onPick = { [weak self] app in
+                self?.addRuleRow(bundleID: app.bundleID, rule: .normal)
+            }
+            appPicker = picker
+        }
+        appPicker?.present(in: parent)
     }
 
     @objc private func removeRule(_ sender: NSButton) {
