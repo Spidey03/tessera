@@ -88,6 +88,9 @@ public enum HotkeyBindings {
         guard let overrides, !overrides.isEmpty else { return result }
         for (action, spec) in overrides.sorted(by: { $0.key < $1.key }) {
             let flags = normalizedFlags(spec.flags)
+            // A combinator-free override would match every bare-key event and
+            // swallow it globally; ignore it instead of honoring it.
+            guard !flags.isEmpty else { continue }
             result.removeAll { $0.keyCode == spec.keyCode }
             result.append(HotkeyBinding(action: action, keyCode: spec.keyCode, flags: flags))
         }

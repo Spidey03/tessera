@@ -274,6 +274,11 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private func commitHotkey(_ event: NSEvent) {
         guard let action = recordingAction else { return }
         let names = flagNames(from: event.modifierFlags)
+        if names.isEmpty {
+            statusLabel.stringValue = "Hotkeys need a modifier (Cmd, Opt, Ctrl or Shift)."
+            cancelHotkeyRecording()
+            return
+        }
         let spec = HotkeySpec(keyCode: UInt16(event.keyCode), flags: names)
 
         let conflict = mergedHotkeys().first { binding in
