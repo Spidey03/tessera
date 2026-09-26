@@ -188,17 +188,37 @@ it is stopped.
 
   (from a source checkout: `./scripts/auth_start.zsh`)
 
-- **Restart the daemon** by hand:
+- **Stop the daemon** (works on every build): the menu's **Stop Daemon**, or in
+  a terminal:
 
   ```bash
-  launchctl kickstart -k gui/$(id -u)/com.tessera.tiling
+  kill "$(cat "$HOME/Library/Application Support/Tessera/daemon.pid")"
+  # or: pkill -f TesseraDaemon
   ```
 
-- **Stop / start the login agents** by hand:
+  The daemon stays stopped until you start it again (no auto-relaunch).
+
+- **Restart the daemon** = stop, then start again (any build):
 
   ```bash
-  launchctl bootout  gui/$(id -u)/com.tessera.tiling   # stop
-  launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.tessera.tiling.plist   # start
+  kill "$(cat "$HOME/Library/Application Support/Tessera/daemon.pid")"
+  open -a Terminal "$HOME/Library/Application Support/Tessera/auth_start.zsh"
+  ```
+
+> ⚠️ **`launchctl` and the unsigned build.** On the current unsigned build the
+> `com.tessera.tiling` agent only runs `/usr/bin/open -a Terminal
+> auth_start.zsh`, which exits immediately — launchd never supervises the
+> daemon itself. So `launchctl bootout / kickstart -k / bootstrap` of that
+> agent **cannot stop, restart, or reach the daemon**; it only removes/creates
+> the login-item registration. Use the pidfile `kill` above to stop, and
+> `tessera-install` to re-wire login items. The `launchctl` job commands below
+> are only meaningful once a **Developer-ID signed** build exists (where launchd
+> runs `TesseraDaemon` directly):
+
+  ```bash
+  launchctl kickstart -k                                  gui/$(id -u)/com.tessera.tiling   # signed builds: restart
+  launchctl bootout   gui/$(id -u)/com.tessera.tiling                                       # signed builds: stop
+  launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.tessera.tiling.plist          # signed builds: start
   ```
 
 ### Updating
