@@ -51,6 +51,10 @@ This split means the entire tiling algorithm can be unit-tested without a displa
 
 ## Installation & Quick Start
 
+> 📖 **End-user manual**: for plain install/uninstall, start/stop, and config
+> instructions, see **[docs/user-guide.md](docs/user-guide.md)**. This section
+> is the developer-oriented quick start.
+
 **Phase 1 — Python Prototype**
 
 ```bash
