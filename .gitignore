@@ -17,3 +17,9 @@ venv/
 .DS_Store
 
 dist/
+
+# Local planning/scratch notes — not part of the project
+.agents/
+plans/
+infinite-retiling.md
+plan-blocks.md
