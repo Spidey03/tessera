@@ -9,6 +9,9 @@ struct KeyBinding {
     func matches(event: CGEvent) -> Bool {
         let eventKeyCode = event.getIntegerValueField(.keyboardEventKeycode)
         guard eventKeyCode == keyCode else { return false }
+        // A binding with no modifiers must never match: an empty flag set is a
+        // subset of every event, which would swallow the bare key globally.
+        guard !flags.isEmpty else { return false }
         // Only check that required flags are present; the system may set
         // additional device-specific flags that we shouldn't reject.
         return flags.isSubset(of: event.flags)

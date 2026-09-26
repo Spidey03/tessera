@@ -13,6 +13,7 @@ struct KeyBinding: Sendable {
     func matches(event: CGEvent) -> Bool {
         let eventKeyCode = event.getIntegerValueField(.keyboardEventKeycode)
         guard eventKeyCode == keyCode else { return false }
+        guard !flags.isEmpty else { return false }
         return flags.isSubset(of: event.flags)
     }
 }
@@ -347,6 +348,22 @@ func testKeyBindingExtraFlagsStillMatches() throws {
     event.flags = [.maskCommand, .maskAlternate, .maskNonCoalesced, .maskAlphaShift]
     let binding = KeyBinding(keyCode: 36, flags: [.maskCommand, .maskAlternate], action: "tile")
     try assert(binding.matches(event: event))
+}
+
+func testKeyBindingEmptyFlagsNeverMatch() throws {
+    // Regression: an empty flag set is a subset of every event, so a binding
+    // with no modifiers must never match — otherwise the bare key is swallowed
+    // globally (issue: 'c' not typing while the daemon runs).
+    let binding = KeyBinding(keyCode: 8, flags: [], action: "tile") // 'c', no modifiers
+    let plain = CGEvent(keyboardEventSource: nil, virtualKey: 8, keyDown: true)!
+    plain.flags = []
+    let combined = CGEvent(keyboardEventSource: nil, virtualKey: 8, keyDown: true)!
+    combined.flags = [.maskCommand, .maskAlternate]
+    let deviceFlags = CGEvent(keyboardEventSource: nil, virtualKey: 8, keyDown: true)!
+    deviceFlags.flags = [.maskNonCoalesced, .maskAlphaShift]
+    try assert(!binding.matches(event: plain))
+    try assert(!binding.matches(event: combined))
+    try assert(!binding.matches(event: deviceFlags))
 }
 
 // MARK: - Fullscreen binding
@@ -1155,6 +1172,18 @@ func testHotkeyMergeKeepsDefaultsWithoutOverrides() throws {
     try assert(HotkeyBindings.merge(defaults: HotkeyBindings.defaults, overrides: [:]) == HotkeyBindings.defaults)
 }
 
+func testHotkeyMergeIgnoresNoModifierOverride() throws {
+    // Regression: an override with no modifiers must be dropped, not bound —
+    // the default binding stays intact and no bare-key combo is created.
+    let merged = HotkeyBindings.merge(
+        defaults: HotkeyBindings.defaults,
+        overrides: ["tile": HotkeySpec(keyCode: 8, flags: [])] // 'c', no modifiers
+    )
+    try assertEqual(merged, HotkeyBindings.defaults)
+    try assert(merged.contains { $0.action == "tile" && $0.keyCode == 36 })
+    try assert(!merged.contains { $0.keyCode == 8 })
+}
+
 func testHotkeyMergeOverrideAddsComboAndKeepsAliases() throws {
     // Overriding focusLeft onto ⌘⌥T (17) adds the new combo while the H (4)
     // and K (40) aliases survive; T was otherwise unclaimed so nothing frees.
@@ -1295,6 +1324,7 @@ let tests: [(String, () throws -> Void)] = [
     ("KeyBinding wrong keyCode does not match", testKeyBindingWrongKeyCodeDoesNotMatch),
     ("KeyBinding missing flags does not match", testKeyBindingMissingFlagsDoesNotMatch),
     ("KeyBinding extra flags still matches", testKeyBindingExtraFlagsStillMatches),
+    ("KeyBinding empty flags never match", testKeyBindingEmptyFlagsNeverMatch),
     // Fullscreen binding
     ("KeyBinding fullscreen matches", testKeyBindingFullscreenMatches),
     ("KeyBinding fullscreen wrong keyCode", testKeyBindingFullscreenWrongKeyCode),
@@ -1373,6 +1403,7 @@ let tests: [(String, () throws -> Void)] = [
     ("Hotkey defaults carry documented combos", testHotkeyDefaultsCarryDocumentedCombos),
     ("Hotkey normalizedFlags aliases + order", testHotkeyNormalizedFlagsAliasesAndOrder),
     ("Hotkey merge keeps defaults without overrides", testHotkeyMergeKeepsDefaultsWithoutOverrides),
+    ("Hotkey merge ignores no-modifier override", testHotkeyMergeIgnoresNoModifierOverride),
     ("Hotkey merge override adds combo and keeps aliases", testHotkeyMergeOverrideAddsComboAndKeepsAliases),
     ("Hotkey merge override frees only the claimed key", testHotkeyMergeOverrideFreesOnlyTheClaimedKey),
     ("Hotkey merge active combos list", testHotkeyMergeActiveCombos),

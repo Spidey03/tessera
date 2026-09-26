@@ -211,7 +211,14 @@ enum ConfigLoader {
     }
 
     private static func mergeBindings(_ hotkeys: [String: HotkeySpec]?) -> [KeyBinding] {
-        HotkeyBindings.merge(defaults: HotkeyBindings.defaults, overrides: hotkeys)
+        if let hotkeys {
+            for (action, spec) in hotkeys where HotkeyBindings.normalizedFlags(spec.flags).isEmpty {
+                // Belt-and-suspenders: an override with no modifiers must never
+                // become a live binding (it would swallow that key globally).
+                print("[config] WARNING: hotkey '\(action)' has no modifiers (keyCode \(spec.keyCode)) — ignoring override")
+            }
+        }
+        return HotkeyBindings.merge(defaults: HotkeyBindings.defaults, overrides: hotkeys)
             .map { loadBinding(from: $0) }
     }
 }
