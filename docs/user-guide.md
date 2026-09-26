@@ -206,8 +206,9 @@ it is stopped.
   ```
 
 > ⚠️ **`launchctl` and the unsigned build.** On the current unsigned build the
-> `com.tessera.tiling` agent only runs `/usr/bin/open -a Terminal
-> auth_start.zsh`, which exits immediately — launchd never supervises the
+> `com.tessera.tiling` agent only runs `/usr/bin/open -gj -a Terminal
+> auth_start.zsh` (the `-gj` opens Terminal in the background, so no window
+> appears at login), which exits immediately — launchd never supervises the
 > daemon itself. So `launchctl bootout / kickstart -k / bootstrap` of that
 > agent **cannot stop, restart, or reach the daemon**; it only removes/creates
 > the login-item registration. Use the pidfile `kill` above to stop, and
