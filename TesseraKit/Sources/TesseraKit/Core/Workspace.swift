@@ -98,12 +98,26 @@ public final class Workspace: @unchecked Sendable {
             surviving = parentNode.leftChild!
         }
 
+        // The survivor inherits the space *both* children shared, not the half it
+        // already occupies — otherwise removing one side of a split leaves the
+        // other stranded at half width instead of expanding into the gap.
+        let vacatedRect = parentNode.rect
+
         parentNode.window = surviving.window
-        parentNode.rect = surviving.rect
         parentNode.leftChild = surviving.leftChild
         parentNode.rightChild = surviving.rightChild
         parentNode.splitType = surviving.splitType
+        // Carry the ratio too: when the survivor is itself a split, its own
+        // children are re-laid-out below and would otherwise fall back to 50/50.
+        parentNode.ratio = surviving.ratio
         parentNode.isFocused = true
+
+        // Reflow rather than trusting the stored rects. When the survivor is a
+        // leaf this re-derives its gap-inset window rect across the whole
+        // vacated area; when it is a subtree it recursively re-derives every
+        // descendant, which copying the fields alone would leave stale.
+        reflow(parentNode, in: vacatedRect, gap: config.gapSize / 2.0)
+        print("[bsp] remove → survivor takes \(vacatedRect)")
 
         return removed
     }
