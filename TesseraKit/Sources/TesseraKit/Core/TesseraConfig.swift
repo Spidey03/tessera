@@ -45,6 +45,11 @@ public struct TesseraConfig: Sendable, Equatable {
     public var animationEnabled: Bool
     public var animationSteps: Int
     public var animationDuration: Double
+    /// Interpolation shape for window motion. `easeOutQuad` preserves the
+    /// historical feel; see `AnimationCurve`.
+    public var animationCurve: AnimationCurve
+    /// Per-window delay in seconds, producing a stagger. 0 disables it.
+    public var animationStagger: Double
     public var multiMonitor: MultiMonitorConfig
 
     public init(
@@ -63,6 +68,8 @@ public struct TesseraConfig: Sendable, Equatable {
         animationEnabled: Bool = true,
         animationSteps: Int = 8,
         animationDuration: Double = 0.15,
+        animationCurve: AnimationCurve = .default,
+        animationStagger: Double = 0.0,
         multiMonitor: MultiMonitorConfig = MultiMonitorConfig()
     ) {
         self.gapSize = gapSize
@@ -80,6 +87,8 @@ public struct TesseraConfig: Sendable, Equatable {
         self.animationEnabled = animationEnabled
         self.animationSteps = animationSteps
         self.animationDuration = animationDuration
+        self.animationCurve = animationCurve
+        self.animationStagger = animationStagger
         self.multiMonitor = multiMonitor
     }
 
@@ -99,6 +108,8 @@ public struct TesseraConfig: Sendable, Equatable {
             lhs.animationEnabled == rhs.animationEnabled &&
             lhs.animationSteps == rhs.animationSteps &&
             lhs.animationDuration == rhs.animationDuration &&
+            lhs.animationCurve == rhs.animationCurve &&
+            lhs.animationStagger == rhs.animationStagger &&
             lhs.multiMonitor == rhs.multiMonitor
     }
 

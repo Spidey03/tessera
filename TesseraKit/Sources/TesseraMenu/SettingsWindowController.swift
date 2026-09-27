@@ -15,6 +15,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private let animationEnabledCheck = NSButton(checkboxWithTitle: "Animate window movement", target: nil, action: nil)
     private let animationStepsField = NSTextField(string: "")
     private let animationDurationField = NSTextField(string: "")
+    private let animationStaggerField = NSTextField(string: "")
+    private let animationCurveButton = NSPopUpButton()
 
     private let rulesStack = NSStackView()
     private var ruleRows: [(field: NSTextField, popup: NSPopUpButton)] = []
@@ -147,10 +149,17 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
         animationEnabledCheck.target = self
         root.addArrangedSubview(checkboxRow(animationEnabledCheck))
-        root.addArrangedSubview(fieldRow("Steps:", animationStepsField))
-        let durationRow = fieldRow("Duration (s):", animationDurationField)
-        root.addArrangedSubview(durationRow)
-        root.setCustomSpacing(18, after: durationRow)
+        for curve in AnimationCurve.allCases {
+            animationCurveButton.addItem(withTitle: curve.displayName)
+        }
+        animationCurveButton.controlSize = .small
+        let curveRow = popupRow("Curve:", animationCurveButton)
+        root.addArrangedSubview(curveRow)
+        root.addArrangedSubview(fieldRow("Duration (s):", animationDurationField))
+        root.addArrangedSubview(fieldRow("Stagger (ms):", animationStaggerField))
+        let stepsRow = fieldRow("Steps:", animationStepsField)
+        root.addArrangedSubview(stepsRow)
+        root.setCustomSpacing(18, after: stepsRow)
 
         root.addArrangedSubview(sectionHeader("Per-app tiling rules"))
 
@@ -250,6 +259,26 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         return row
     }
 
+    /// Same right-aligned row shape as `fieldRow`, for a popup button.
+    private func popupRow(_ text: String, _ popup: NSPopUpButton, width: CGFloat = 120) -> NSView {
+        let label = NSTextField(labelWithString: text)
+        label.font = NSFont.systemFont(ofSize: 13)
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        popup.widthAnchor.constraint(equalToConstant: width).isActive = true
+
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+        let row = NSStackView(views: [label, spacer, popup])
+        row.orientation = .horizontal
+        row.spacing = 8
+        row.alignment = .centerY
+        row.translatesAutoresizingMaskIntoConstraints = false
+        row.widthAnchor.constraint(equalToConstant: 428).isActive = true
+        return row
+    }
+
     /// A full-width checkbox row so its label sits at the left column edge.
     private func checkboxRow(_ check: NSButton) -> NSView {
         check.font = NSFont.systemFont(ofSize: 13)
@@ -274,6 +303,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         animationEnabledCheck.state = settings.animationEnabled ? .on : .off
         animationStepsField.stringValue = "\(settings.animationSteps)"
         animationDurationField.stringValue = String(format: "%.2f", settings.animationDuration)
+        animationStaggerField.stringValue = String(format: "%.0f", settings.animationStagger * 1000)
+        animationCurveButton.selectItem(withTitle: settings.animationCurve.displayName)
 
         for (bundleID, rule) in settings.appRules.sorted(by: { $0.key < $1.key }) {
             addRuleRow(bundleID: bundleID, rule: rule)
@@ -478,7 +509,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         guard let gap = Double(gapSizeField.stringValue.trimmingCharacters(in: .whitespaces)),
               let outer = Double(outerGapField.stringValue.trimmingCharacters(in: .whitespaces)),
               let steps = Int(animationStepsField.stringValue.trimmingCharacters(in: .whitespaces)),
-              let duration = Double(animationDurationField.stringValue.trimmingCharacters(in: .whitespaces)) else {
+              let duration = Double(animationDurationField.stringValue.trimmingCharacters(in: .whitespaces)),
+              let staggerMs = Double(animationStaggerField.stringValue.trimmingCharacters(in: .whitespaces)) else {
             statusLabel.stringValue = "Invalid number."
             return
         }
@@ -489,6 +521,11 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         settings.animationEnabled = animationEnabledCheck.state == .on
         settings.animationSteps = steps
         settings.animationDuration = duration
+        settings.animationStagger = staggerMs / 1000
+        for curve in AnimationCurve.allCases where curve.displayName == animationCurveButton.titleOfSelectedItem {
+            settings.animationCurve = curve
+            break
+        }
 
         var rules: [String: AppTilingRule] = [:]
         for (field, popup) in ruleRows {

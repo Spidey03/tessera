@@ -244,8 +244,27 @@ final class Daemon: @unchecked Sendable {
     /// Saves per-display workspace + mapper state for subsequent focus/remove operations.
     func tileWithSuppression() {
         observer.isSuppressed = true
+
+        // Snapshot the window set *before* the tile so the trigger can be
+        // inferred by diffing (see TileTriggerAnalyzer): a window appearing or
+        // disappearing is what distinguishes an insert/remove from a relayout.
+        //
+        // Keyed on stableID, never MacWindow.id: id is the AXUIElement pointer
+        // and is rebuilt on every discovery pass, so the same window would
+        // change id between tiles and every relayout would look like a
+        // full remove+insert.
+        let previousWindowIDs = Set(currentMappers.values.flatMap { $0.allWindows.map(\.stableID) })
+
         let results = tiler.tileAllWindows(previousOrderKeys: previousLayoutOrderKeys(),
                                            previousSplitStates: previousSplitStatesByDisplay())
+
+        let analysis = TileTriggerAnalyzer.analyze(
+            previous: previousWindowIDs,
+            current: Set(results.values.flatMap { $0.mapper.allWindows.map(\.stableID) })
+        )
+        if animationDebugEnabled {
+            print("[animate] trigger=\(analysis.trigger.rawValue) inserted=\(analysis.inserted.count) removed=\(analysis.removed.count) animated=\(analysis.animated.count)")
+        }
 
         // Update per-display state and prune displays that disappeared
         let liveIDs = Set(ScreenManager.displays.map(\.id))
@@ -260,29 +279,32 @@ final class Daemon: @unchecked Sendable {
         // and absolute float frames survive re-tiles and restarts.
         persistEffectiveState(from: results, liveIDs: liveIDs)
 
+        var animatedTargetCount = 0
         for (displayID, result) in results {
             guard let mapper = currentMappers[displayID] else { continue }
-            let startPositions = mapper.allWindows
-                .filter { result.animationTargets.keys.contains($0.id) }
-                .reduce(into: [:]) { $0[$1.id] = $1.position }
             centerNewFloaters(displayID: displayID, newlyFloated: result.newlyFloated)
-            if tiler.config.animationEnabled && !result.animationTargets.isEmpty {
-                animateWindows(displayID: displayID, targets: result.animationTargets, startPositions: startPositions,
-                               steps: tiler.config.animationSteps,
-                               duration: tiler.config.animationDuration)
-            } else if !result.animationTargets.isEmpty {
-                guard var instantMapper = currentMappers[displayID] else { continue }
-                for (id, pos) in result.animationTargets {
-                    guard let macWin = instantMapper.window(withID: id) else { continue }
-                    var pt = pos
-                    if let axValue = AXValueCreate(.cgPoint, &pt) {
-                        AXUIElementSetAttributeValue(macWin.windowRef, kAXPositionAttribute as CFString, axValue)
-                    }
-                }
-                instantMapper.updatePositions(result.animationTargets)
-                currentMappers[displayID] = instantMapper
-                print("[tile] instant placement: \(result.animationTargets.count) window(s) on display \(displayID)")
-            }
+
+            guard !result.animationTargets.isEmpty else { continue }
+
+            // Only the windows the trigger nominates glide; everything else
+            // lands this frame.
+            //
+            // `analysis.animated` is keyed on stableID while `animationTargets`
+            // is keyed on MacWindow.id, so bridge the two identity spaces via
+            // this display's windows rather than intersecting the sets
+            // directly.
+            let nominatedIDs = Set(result.mapper.allWindows
+                .filter { analysis.animated.contains($0.stableID) }
+                .map(\.id))
+            animatedTargetCount += placeWindows(
+                displayID: displayID,
+                mapper: mapper,
+                targets: result.animationTargets,
+                animatedIDs: nominatedIDs
+            )
+        }
+        if motionAllowed, animatedTargetCount == 0, analysis.trigger != .relayout, analysis.trigger != .initial {
+            print("[tile] instant placement: motion disabled or nothing to glide on display")
         }
         observer.isSuppressed = false
         subscribeAllWindows()
@@ -292,21 +314,10 @@ final class Daemon: @unchecked Sendable {
 
         // Prevent spurious re-tiles from transient windows created during resize.
         // Must outlast animation + AX debounce interval + notification delivery window.
-        let cooldown = max(0.5, tiler.config.animationDuration + 0.35)
-        recentlyTiled = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + cooldown) { [weak self] in
-            guard let self else { return }
-            self.recentlyTiled = false
-            // Catch changes that happened entirely inside the cooldown (e.g. a drag
-            // completed right after a tile) so they still get re-tiled.
-            let fingerprints = self.currentFingerprintsByDisplay()
-            let allKeys = Set(fingerprints.keys).union(self.lastTileableFingerprints.keys)
-            let changed = allKeys.contains { fingerprints[$0] != self.lastTileableFingerprints[$0] }
-            if changed {
-                print("[auto-tile] change caught after cooldown — tiling")
-                self.tileWithSuppression()
-            }
-        }
+        // Must outlast the slowest window, which under a stagger is the *last*
+        // one to start — using animationDuration alone would clear the cooldown
+        // while the tail of the animation is still in flight.
+        holdCooldown(animatedWindowCount: animatedTargetCount)
     }
 
     /// Fingerprint of each display's current layout order: for every tiled
@@ -359,47 +370,148 @@ final class Daemon: @unchecked Sendable {
 
     /// Stable identity for a floating window's saved frame.
     private func floaterKey(for win: MacWindow) -> String {
-        "\(win.appName)|\(win.title)"
+        win.stableID
     }
 
-    private func animateWindows(displayID: CGDirectDisplayID, targets: [String: CGPoint], startPositions: [String: CGPoint], steps: Int, duration: TimeInterval) {
-        guard !targets.isEmpty else { return }
-        let interval = duration / Double(max(steps, 1))
-        print("[animate] sliding \(targets.count) windows on display \(displayID) — \(steps) steps over \(Int(duration * 1000))ms")
+    /// Logged once so Reduce Motion does not print on every keystroke tile.
+    private var didLogReduceMotion = false
 
-        for i in 1...steps {
-            let t = Double(i) / Double(steps)
-            let eased = t < 1 ? 1 - pow(1 - t, 2) : 1.0
-            DispatchQueue.main.asyncAfter(deadline: .now() + interval * Double(i)) { [weak self] in
-                guard let self else { return }
-                for (id, targetPos) in targets {
-                    guard let macWin = self.currentMappers[displayID]?.window(withID: id) else { continue }
-                    let startPos = startPositions[id] ?? targetPos
-                    let x = startPos.x + (targetPos.x - startPos.x) * eased
-                    let y = startPos.y + (targetPos.y - startPos.y) * eased
-                    var pt = CGPoint(x: x, y: y)
+    /// Whether windows are permitted to glide at all this tile.
+    ///
+    /// Reduce Motion wins over `animationEnabled`: a window manager that
+    /// slides windows around regardless has not respected a user who asked for
+    /// less motion. Read per tile, not cached, so toggling the setting in
+    /// System Settings takes effect immediately.
+    private var motionAllowed: Bool {
+        guard tiler.config.animationEnabled else { return false }
+        if AccessibilityPreferences.reduceMotion {
+            if !didLogReduceMotion {
+                didLogReduceMotion = true
+                print("[animate] Reduce Motion is on - placing windows instantly")
+            }
+            return false
+        }
+        return true
+    }
+
+    private func animationTiming() -> AnimationTiming {
+        return AnimationTiming(duration: tiler.config.animationDuration,
+                               stagger: tiler.config.animationStagger,
+                               steps: tiler.config.animationSteps)
+    }
+
+    /// Opt-in frame timing, for verifying vsync alignment without screen
+    /// recording: TESSERA_ANIMATION_DEBUG=1.
+    private var animationDebugEnabled: Bool {
+        return ProcessInfo.processInfo.environment["TESSERA_ANIMATION_DEBUG"] == "1"
+    }
+
+    /// Places `targets` on a display: the windows in `animatedIDs` glide, the
+    /// rest land this frame. Reduce Motion collapses the animated set to empty,
+    /// so the whole tile becomes instant.
+    ///
+    /// Every animated placement goes through here — the tile funnel, and
+    /// `removeFocused` — so there is a single place to change when placement
+    /// starts interpolating full rects rather than origins.
+    ///
+    /// - Parameter animatedIDs: keyed on `MacWindow.id`, the same space as
+    ///   `targets`. Callers holding stable identities must bridge first.
+    /// - Returns: how many windows actually glided, for the cooldown maths.
+    @discardableResult
+    private func placeWindows(
+        displayID: CGDirectDisplayID,
+        mapper: WindowMapper,
+        targets: [String: CGPoint],
+        animatedIDs: Set<String>
+    ) -> Int {
+        guard !targets.isEmpty else { return 0 }
+
+        let animatedTargets = motionAllowed && !animatedIDs.isEmpty
+            ? targets.filter { animatedIDs.contains($0.key) }
+            : [:]
+        let instantTargets = targets.filter { !animatedTargets.keys.contains($0.key) }
+
+        if !instantTargets.isEmpty {
+            placeInstantly(displayID: displayID, targets: instantTargets)
+        }
+        guard !animatedTargets.isEmpty else { return 0 }
+
+        let startPositions = mapper.allWindows
+            .filter { animatedTargets.keys.contains($0.id) }
+            .reduce(into: [String: CGPoint]()) { $0[$1.id] = $1.position }
+        animateWindows(displayID: displayID, targets: animatedTargets, startPositions: startPositions,
+                       curve: tiler.config.animationCurve,
+                       timing: animationTiming())
+        return animatedTargets.count
+    }
+
+    /// Put windows at their target origins within one frame and sync the cached
+    /// positions. Used for every window the trigger did not nominate to glide,
+    /// and for all of them when motion is off.
+    private func placeInstantly(displayID: CGDirectDisplayID, targets: [String: CGPoint]) {
+        guard !targets.isEmpty, var mapper = currentMappers[displayID] else { return }
+        for (id, pos) in targets {
+            guard let macWin = mapper.window(withID: id) else { continue }
+            var pt = pos
+            if let axValue = AXValueCreate(.cgPoint, &pt) {
+                AXUIElementSetAttributeValue(macWin.windowRef, kAXPositionAttribute as CFString, axValue)
+            }
+        }
+        mapper.updatePositions(targets)
+        currentMappers[displayID] = mapper
+    }
+
+    /// Glide the nominated windows to their targets.
+    ///
+    /// Each window gets its own step schedule offset by `timing.stagger`, so a
+    /// stagger is a delay cascade rather than a slower shared clock. The curve
+    /// is sampled uniformly in time and evaluated per step.
+    private func animateWindows(displayID: CGDirectDisplayID,
+                                targets: [String: CGPoint],
+                                startPositions: [String: CGPoint],
+                                curve: AnimationCurve,
+                                timing: AnimationTiming) {
+        guard !targets.isEmpty else { return }
+        let interval = timing.duration / Double(timing.steps)
+        // Deterministic order, so the stagger does not reshuffle between runs
+        // the way Dictionary key order would.
+        let orderedIDs = targets.keys.sorted()
+        print("[animate] sliding \(targets.count) window(s) on display \(displayID) - \(curve.rawValue), \(timing.steps) steps over \(Int(timing.duration * 1000))ms, stagger \(Int(timing.stagger * 1000))ms")
+
+        var lastScheduled: TimeInterval = 0
+        for (index, id) in orderedIDs.enumerated() {
+            guard let targetPos = targets[id] else { continue }
+            let startPos = startPositions[id] ?? targetPos
+            let startOffset = timing.startOffset(index: index)
+
+            for i in 1...timing.steps {
+                let eased = curve.value(at: Double(i) / Double(timing.steps))
+                let delay = startOffset + interval * Double(i)
+                lastScheduled = max(lastScheduled, delay)
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    guard let self, let macWin = self.currentMappers[displayID]?.window(withID: id) else { return }
+                    var pt = CGPoint(x: startPos.x + (targetPos.x - startPos.x) * eased,
+                                     y: startPos.y + (targetPos.y - startPos.y) * eased)
                     if let axValue = AXValueCreate(.cgPoint, &pt) {
                         AXUIElementSetAttributeValue(macWin.windowRef, kAXPositionAttribute as CFString, axValue)
                     }
                 }
-                // Last frame: snap exact and update cached positions
-                if i == steps {
-                    for (id, targetPos) in targets {
-                        var pt = targetPos
-                        if let axValue = AXValueCreate(.cgPoint, &pt),
-                           let macWin = self.currentMappers[displayID]?.window(withID: id) {
-                            AXUIElementSetAttributeValue(macWin.windowRef, kAXPositionAttribute as CFString, axValue)
-                        }
-                    }
-                    if var mapper = self.currentMappers[displayID] {
-                        mapper.updatePositions(targets)
-                        self.currentMappers[displayID] = mapper
-                    }
-                    // Fingerprints were captured pre-animation; refresh now so the
-                    // settled state matches and no redundant re-tile fires later.
-                    self.lastTileableFingerprints = self.currentFingerprintsByDisplay()
-                }
             }
+        }
+
+        // One finalisation for the whole animation, at the moment the *last*
+        // window lands (which under a stagger is not the longest window but
+        // the latest-starting one): snap exact targets, sync the mapper cache,
+        // and refresh fingerprints so a settled tile does not immediately
+        // re-tile itself.
+        let settle = max(lastScheduled, timing.settleTime(windowCount: orderedIDs.count))
+        DispatchQueue.main.asyncAfter(deadline: .now() + settle) { [weak self] in
+            guard let self else { return }
+            self.placeInstantly(displayID: displayID, targets: targets)
+            self.lastTileableFingerprints = self.currentFingerprintsByDisplay()
+        }
+        if animationDebugEnabled {
+            print("[animate] settle at \(Int(settle * 1000))ms for \(targets.count) window(s), interval \(Int(interval * 1000))ms")
         }
     }
 
@@ -545,6 +657,13 @@ final class Daemon: @unchecked Sendable {
         }
     }
 
+    /// Drop the focused window out of the tiling layout and glide the survivors
+    /// into the space it left behind.
+    ///
+    /// This is a removal, so under the hybrid policy every survivor animates —
+    /// unlike the tile funnel, which only glides windows that just appeared.
+    /// The excluded window is deliberately left exactly where it was; it simply
+    /// stops being managed, and survivors move around it.
     func removeFocused() {
         guard let displayID = activeDisplayID() else { print("[remove] no displays — tile first"); return }
         guard let ws = currentWorkspaces[displayID] else { print("[remove] no workspace — tile first"); return }
@@ -560,10 +679,44 @@ final class Daemon: @unchecked Sendable {
             currentMappers[displayID] = nil
         } else {
             let screenRect = screenRect(for: displayID)
-            mapper.applyLayout(layout, screenRect: screenRect)
+            // computeLayout, not applyLayout: survivors get *larger* tiles here,
+            // so their sizes must be recomputed. It returns target origins
+            // without moving anything, which is what lets them glide.
+            let (targets, floatedIDs) = mapper.computeLayout(layout, screenRect: screenRect)
             currentMappers[displayID] = mapper
+            centerNewFloaters(displayID: displayID, newlyFloated: floatedIDs)
+
+            let glided = placeWindows(
+                displayID: displayID,
+                mapper: mapper,
+                targets: targets,
+                animatedIDs: Set(targets.keys)
+            )
+            // The glide itself moves windows, and those moves reach the AX
+            // observer. Hold the same cooldown the funnel uses so the observer
+            // cannot start a second tile on top of this one mid-flight.
+            holdCooldown(animatedWindowCount: glided)
         }
         observer.isSuppressed = false
+    }
+
+    /// Suppress observer-driven auto-tiles for the length of an animation plus
+    /// the AX debounce window, then re-check once for changes that landed inside
+    /// it.
+    private func holdCooldown(animatedWindowCount: Int) {
+        let cooldown = animationTiming().cooldownTime(windowCount: animatedWindowCount)
+        recentlyTiled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + cooldown) { [weak self] in
+            guard let self else { return }
+            self.recentlyTiled = false
+            let fingerprints = self.currentFingerprintsByDisplay()
+            let allKeys = Set(fingerprints.keys).union(self.lastTileableFingerprints.keys)
+            let changed = allKeys.contains { fingerprints[$0] != self.lastTileableFingerprints[$0] }
+            if changed {
+                print("[auto-tile] change caught after cooldown — tiling")
+                self.tileWithSuppression()
+            }
+        }
     }
 
     // MARK: - Layout presets
@@ -663,30 +816,15 @@ final class Daemon: @unchecked Sendable {
 
         let layout = ws.getLayout()
         let screenRect = screenRect(for: displayID)
-        let startPositions = mapper.allWindows.reduce(into: [:]) { $0[$1.id] = $1.position }
         let (targets, _) = mapper.computeLayout(layout, screenRect: screenRect)
         currentMappers[displayID] = mapper
 
-        if tiler.config.animationEnabled && !targets.isEmpty {
-            animateWindows(displayID: displayID, targets: targets, startPositions: startPositions,
-                           steps: tiler.config.animationSteps,
-                           duration: tiler.config.animationDuration)
-        } else {
-            guard var instantMapper = currentMappers[displayID] else {
-                observer.isSuppressed = false
-                return
-            }
-            for (id, pos) in targets {
-                guard let macWin = instantMapper.window(withID: id) else { continue }
-                var pt = pos
-                if let axValue = AXValueCreate(.cgPoint, &pt) {
-                    AXUIElementSetAttributeValue(macWin.windowRef, kAXPositionAttribute as CFString, axValue)
-                }
-            }
-            instantMapper.updatePositions(targets)
-            currentMappers[displayID] = instantMapper
-            lastTileableFingerprints = currentFingerprintsByDisplay()
-        }
+        // A tree mutation (split toggle, split resize) is a relayout: the same
+        // windows land on different tiles, so the hybrid policy places them
+        // instantly instead of gliding. That is also where an AX-driven
+        // animation reads worst, because every pane resizes at once.
+        placeInstantly(displayID: displayID, targets: targets)
+        lastTileableFingerprints = currentFingerprintsByDisplay()
         observer.isSuppressed = false
         fullscreenWindowID = nil
     }

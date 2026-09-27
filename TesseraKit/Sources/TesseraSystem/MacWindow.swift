@@ -19,6 +19,21 @@ public struct MacWindow {
         CGRect(origin: position, size: size)
     }
 
+    /// Identity that survives a fresh discovery pass.
+    ///
+    /// NOT `id`: that is the `AXUIElement` pointer, and every
+    /// `AXUIElementCopyWindows` call builds new CF objects, so the same window
+    /// gets a different pointer on the next tile. Anything that compares
+    /// windows *across* tiles (layout order preservation, float frames, tile
+    /// trigger classification) must key on this instead.
+    ///
+    /// Collides for two same-titled windows in one app (two "Untitled"
+    /// documents), which is the same tradeoff `Daemon.floaterKey` and the
+    /// layout-order key already accept.
+    public var stableID: String {
+        "\(appName)|\(title)"
+    }
+
     @discardableResult
     public mutating func setPosition(_ point: CGPoint) -> Bool {
         var val = point
