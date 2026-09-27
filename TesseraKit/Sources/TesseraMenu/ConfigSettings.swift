@@ -69,6 +69,22 @@ final class ConfigSettings {
         set { dict["animationDuration"] = newValue }
     }
 
+    var animationCurve: AnimationCurve {
+        get {
+            guard let raw = dict["animationCurve"] as? String else { return defaults.animationCurve }
+            return AnimationCurve(configValue: raw)
+        }
+        set { dict["animationCurve"] = newValue.rawValue }
+    }
+
+    /// Per-window stagger in seconds. Clamped to 0…0.05 s: at 0.05 a 10-window
+    /// tile takes half a second longer to settle, which is the point where a
+    /// stagger stops reading as polish and starts reading as lag.
+    var animationStagger: Double {
+        get { number("animationStagger")?.doubleValue ?? defaults.animationStagger }
+        set { dict["animationStagger"] = max(0, min(0.05, newValue)) }
+    }
+
     /// App rules as a sorted list (keys `appRules` in config JSON map to `"normal"`,
     /// `"ignore"`, `"float"`, `"sticky"`).
     var appRules: [String: AppTilingRule] {

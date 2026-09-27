@@ -21,6 +21,8 @@ struct TesseraConfigFile: Codable {
     var animationEnabled: Bool?
     var animationSteps: Int?
     var animationDuration: Double?
+    var animationCurve: String?
+    var animationStagger: Double?
     var multiMonitor: MultiMonitorConfigFile?
     var appRules: [String: AppTilingRule]?
     var excludedSubroles: [String]?
@@ -113,6 +115,8 @@ enum ConfigLoader {
                 "animationEnabled": true,
                 "animationSteps": 8,
                 "animationDuration": 0.15,
+                "animationCurve": "easeOutQuad",
+                "animationStagger": 0.0,
                 "multiMonitor": [
                     "focusMode": "withinDisplay",
                 ],
@@ -169,6 +173,8 @@ enum ConfigLoader {
             animationEnabled: fc.animationEnabled ?? defaults.animationEnabled,
             animationSteps: fc.animationSteps ?? defaults.animationSteps,
             animationDuration: fc.animationDuration ?? defaults.animationDuration,
+            animationCurve: fc.animationCurve.map(AnimationCurve.init(configValue:)) ?? defaults.animationCurve,
+            animationStagger: fc.animationStagger ?? defaults.animationStagger,
             multiMonitor: MultiMonitorConfig(
                 focusMode: fc.multiMonitor?.focusMode ?? MultiMonitorConfig().focusMode
             )

@@ -47,6 +47,10 @@ func assertNil<T>(_ a: T?, file: String = #file, line: Int = #line) throws {
     try assert(a == nil, "Expected nil, got \(String(describing: a)) (\(file):\(line))")
 }
 
+func assertEqual(_ a: Double, _ b: Double, accuracy: Double, file: String = #file, line: Int = #line) throws {
+    try assert(abs(a - b) <= accuracy, "Expected \(b) +/- \(accuracy), got \(a) (\(file):\(line))")
+}
+
 func assertLessThan(_ a: Double, _ b: Double, file: String = #file, line: Int = #line) throws {
     try assert(a < b, "Expected \(a) < \(b) (\(file):\(line))")
 }
@@ -1292,7 +1296,193 @@ func testAppcastParseThrowsOnMalformedData() throws {
 
 // MARK: - Runner
 
+
+// MARK: - Animation curves
+
+/// Every curve must start at 0, land exactly on 1, and never pass the target —
+/// an overshoot would push a window into its neighbour's tile for a few frames.
+func testEveryCurveStartsAtZeroAndLandsOnOne() throws {
+    for curve in AnimationCurve.allCases {
+        try assert(abs(curve.value(at: 0)) < 1e-9, "\(curve.rawValue) starts at \(curve.value(at: 0))")
+        try assert(abs(curve.value(at: 1) - 1) < 1e-9, "\(curve.rawValue) lands at \(curve.value(at: 1))")
+    }
+}
+
+func testEveryCurveIsMonotonic() throws {
+    let samples = 200
+    for curve in AnimationCurve.allCases {
+        var previous = curve.value(at: 0)
+        for i in 1...samples {
+            let value = curve.value(at: Double(i) / Double(samples))
+            try assert(value >= previous - 1e-12,
+                       "\(curve.rawValue) went backwards: \(previous) -> \(value) at step \(i)")
+            previous = value
+        }
+    }
+}
+
+func testCurveClampsOutOfRangeProgress() throws {
+    for curve in AnimationCurve.allCases {
+        try assertEqual(curve.value(at: -5), 0)
+        try assertEqual(curve.value(at: 7), 1)
+    }
+}
+
+func testCurveShapesMatchTheirNames() throws {
+    try assertEqual(AnimationCurve.linear.value(at: 0.25), 0.25, accuracy: 1e-12)
+    try assertEqual(AnimationCurve.easeOutQuad.value(at: 0.5), 0.75, accuracy: 1e-12)
+    try assertEqual(AnimationCurve.easeOut.value(at: 0.5), 0.875, accuracy: 1e-12)
+    // easeInEaseOut is symmetric about the midpoint.
+    try assertEqual(AnimationCurve.easeInEaseOut.value(at: 0.5), 0.5, accuracy: 1e-12)
+    try assertEqual(AnimationCurve.easeInEaseOut.value(at: 0.25),
+                    1 - AnimationCurve.easeInEaseOut.value(at: 0.75), accuracy: 1e-12)
+}
+
+func testEaseOutIsSnappierThanEaseOutQuadEarlyOn() throws {
+    // More progress early = the window covers ground sooner and settles longer.
+    try assert(AnimationCurve.easeOut.value(at: 0.2) > AnimationCurve.easeOutQuad.value(at: 0.2))
+    try assert(AnimationCurve.easeOut.value(at: 0.2) < 1.0)
+}
+
+func testSpringIsSlowerToSettleThanEaseOut() throws {
+    // Carries momentum, so it lags easeOut at the same duration.
+    try assert(AnimationCurve.spring.value(at: 0.3) < AnimationCurve.easeOut.value(at: 0.3))
+}
+
+func testCurveParsesConfigValuesLeniently() throws {
+    try assertEqual(AnimationCurve(configValue: "easeOut"), .easeOut)
+    try assertEqual(AnimationCurve(configValue: "  EaseOutQuad  "), .easeOutQuad)
+    try assertEqual(AnimationCurve(configValue: "easeout"), .easeOut)
+    try assertEqual(AnimationCurve(configValue: "SPRING"), .spring)
+    // Unknown, misspelled or empty must not disable motion.
+    try assertEqual(AnimationCurve(configValue: "wobble"), .default)
+    try assertEqual(AnimationCurve(configValue: ""), .default)
+}
+
+func testDefaultCurvePreservesHistoricalFeel() throws {
+    // Changing the default would silently alter motion for every existing install.
+    try assertEqual(AnimationCurve.default, .easeOutQuad)
+    try assertEqual(TesseraConfig().animationCurve, .easeOutQuad)
+    try assertEqual(TesseraConfig().animationStagger, 0.0)
+}
+
+// MARK: - Animation timing
+
+func testStaggerDelaysEachWindowByItsIndex() throws {
+    let timing = AnimationTiming(duration: 0.2, stagger: 0.02, steps: 8)
+    try assertEqual(timing.startOffset(index: 0), 0)
+    try assertEqual(timing.startOffset(index: 3), 0.06, accuracy: 1e-9)
+    // Negative indices clamp rather than running the stagger backwards.
+    try assertEqual(timing.startOffset(index: -2), 0)
+}
+
+func testSettleTimeAccountsForStagger() throws {
+    let timing = AnimationTiming(duration: 0.15, stagger: 0.03, steps: 8)
+    try assertEqual(timing.settleTime(windowCount: 1), 0.15, accuracy: 1e-9)
+    try assertEqual(timing.settleTime(windowCount: 4), 0.24, accuracy: 1e-9)
+    // This is what the re-tile cooldown is derived from; forgetting the stagger
+    // term clears the cooldown mid-animation.
+    try assert(timing.settleTime(windowCount: 4) > timing.duration)
+}
+
+func testTimingClampsNonsensicalValues() throws {
+    let timing = AnimationTiming(duration: -1, stagger: -0.5, steps: 0)
+    try assertEqual(timing.duration, 0)
+    try assertEqual(timing.stagger, 0)
+    try assertEqual(timing.steps, 1)
+    try assertEqual(timing.settleTime(windowCount: 0), 0)
+}
+
+func testCooldownOutlastsTheAnimation() throws {
+    let timing = AnimationTiming(duration: 0.15, stagger: 0.02, steps: 8)
+    // Every window must still be at rest — plus AX debounce — before the
+    // observer is allowed to tile again, or a second tile lands mid-glide.
+    for count in 1...5 {
+        try assert(timing.cooldownTime(windowCount: count) > timing.settleTime(windowCount: count),
+                   "cooldown for \(count) window(s) must exceed its settle time")
+    }
+    // Stagger pushes the cooldown out: the last window starts last.
+    let unstaggered = AnimationTiming(duration: 0.15, stagger: 0, steps: 8)
+    try assert(timing.cooldownTime(windowCount: 4) > unstaggered.cooldownTime(windowCount: 4))
+    // The floor still applies to instant placements, so bursts coalesce.
+    try assertEqual(AnimationTiming(duration: 0, stagger: 0, steps: 8).cooldownTime(windowCount: 0),
+                    0.5, accuracy: 1e-9)
+}
+
+// MARK: - Tile trigger classification
+
+func testFirstTileIsInitialAndPlacesInstantly() throws {
+    let analysis = TileTriggerAnalyzer.analyze(previous: [], current: ["A", "B"])
+    try assertEqual(analysis.trigger, .initial)
+    // Policy: nothing glides. `inserted` stays a raw set difference, so on the
+    // very first tile every window is technically "inserted" — the analysis
+    // separates what changed (fact) from what moves (policy).
+    try assertEqual(analysis.animated, [])
+    try assertEqual(analysis.inserted, ["A", "B"])
+    try assertEqual(analysis.removed, [])
+}
+
+func testNewWindowAnimatesOnlyTheNewcomer() throws {
+    let analysis = TileTriggerAnalyzer.analyze(previous: ["A", "B"], current: ["A", "B", "C"])
+    try assertEqual(analysis.trigger, .insert)
+    try assertEqual(analysis.inserted, ["C"])
+    try assertEqual(analysis.animated, ["C"])
+}
+
+func testClosedWindowAnimatesTheSurvivors() throws {
+    let analysis = TileTriggerAnalyzer.analyze(previous: ["A", "B", "C"], current: ["A", "B"])
+    try assertEqual(analysis.trigger, .remove)
+    try assertEqual(analysis.removed, ["C"])
+    try assertEqual(analysis.animated, ["A", "B"])
+}
+
+func testSameWindowsRelaidOutIsInstant() throws {
+    // Layout mode switch, split toggle, split resize, display change.
+    let analysis = TileTriggerAnalyzer.analyze(previous: ["A", "B"], current: ["A", "B"])
+    try assertEqual(analysis.trigger, .relayout)
+    try assertEqual(analysis.animated, [])
+}
+
+func testSimultaneousOpenAndCloseAnimatesAsInsert() throws {
+    let analysis = TileTriggerAnalyzer.analyze(previous: ["A", "B"], current: ["A", "C"])
+    try assertEqual(analysis.trigger, .insert)
+    try assertEqual(analysis.inserted, ["C"])
+    try assertEqual(analysis.removed, ["B"])
+    try assertEqual(analysis.animated, ["C"])
+}
+
+func testClosingEveryWindowAnimatesNothing() throws {
+    let analysis = TileTriggerAnalyzer.analyze(previous: ["A"], current: [])
+    try assertEqual(analysis.trigger, .remove)
+    try assertEqual(analysis.animated, [])
+}
+
+func testTriggerAnalysisIsEquatable() throws {
+    let a = TileTriggerAnalyzer.analyze(previous: ["A"], current: ["A", "B"])
+    let b = TileTriggerAnalyzer.analyze(previous: ["A"], current: ["A", "B"])
+    try assertEqual(a, b)
+}
+
 let tests: [(String, () throws -> Void)] = [
+    ("Every animation curve starts at 0 and lands on 1", testEveryCurveStartsAtZeroAndLandsOnOne),
+    ("Every animation curve is monotonic (never overshoots)", testEveryCurveIsMonotonic),
+    ("Animation curves clamp out-of-range progress", testCurveClampsOutOfRangeProgress),
+    ("Animation curve shapes match their names", testCurveShapesMatchTheirNames),
+    ("Ease Out is snappier than Ease Out Quad early on", testEaseOutIsSnappierThanEaseOutQuadEarlyOn),
+    ("Spring settles slower than Ease Out", testSpringIsSlowerToSettleThanEaseOut),
+    ("Animation curve parses config values leniently", testCurveParsesConfigValuesLeniently),
+    ("Default curve preserves historical feel", testDefaultCurvePreservesHistoricalFeel),
+    ("Stagger delays each window by its index", testStaggerDelaysEachWindowByItsIndex),
+    ("Settle time accounts for stagger", testSettleTimeAccountsForStagger),
+    ("Cooldown outlasts the animation", testCooldownOutlastsTheAnimation),
+    ("Animation timing clamps nonsensical values", testTimingClampsNonsensicalValues),
+    ("First tile is initial and places instantly", testFirstTileIsInitialAndPlacesInstantly),
+    ("New window animates only the newcomer", testNewWindowAnimatesOnlyTheNewcomer),
+    ("Closed window animates the survivors", testClosedWindowAnimatesTheSurvivors),
+    ("Same windows relaid out is instant", testSameWindowsRelaidOutIsInstant),
+    ("Simultaneous open and close animates as insert", testSimultaneousOpenAndCloseAnimatesAsInsert),
+    ("Closing every window animates nothing", testClosingEveryWindowAnimatesNothing),
+    ("Trigger analysis is equatable", testTriggerAnalysisIsEquatable),
     ("Add first window fills usable area", testAddFirstWindowFillsUsableArea),
     ("Second window splits vertically by default", testSecondWindowSplitsVerticallyByDefault),
     ("Third window splits horizontal on focused", testThirdWindowSplitsHorizontalOnFocused),
