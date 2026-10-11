@@ -122,7 +122,10 @@ struct Tiler {
 
         // Build the display tree with only tiled windows, using the active
         // layout mode (bsp, masterStack or columns).
-        let workspace = makeWorkspace(displayID: display.id, ordered: orderedTiledIDs, screenRect: screenRect, splitStates: splitStates)
+        // splitStates arrive keyed on stable identities; translate them onto this
+        // pass's ids so they attach to the nodes they were captured from.
+        let workspace = makeWorkspace(displayID: display.id, ordered: orderedTiledIDs, screenRect: screenRect,
+                                      splitStates: mapper.resolveSplitStates(splitStates))
 
         let layout = workspace.getLayout()
         print("[tiler]   layout has \(layout.count) entries:")

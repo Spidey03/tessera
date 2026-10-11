@@ -160,13 +160,17 @@ public final class Workspace: @unchecked Sendable {
     /// stable while those two leaves exist — so surviving splits keep their
     /// weights even when windows elsewhere in the tree are added or removed.
     /// Only meaningful in bsp mode (masterStack/columns ignore ratios).
+    ///
+    /// The ids are whatever the caller supplied. The daemon passes volatile
+    /// `AXUIElement` pointers, so it re-keys these to stable identities before
+    /// they cross a tile boundary — see `SplitStateKey`.
     public func captureSplitState() -> [String: SplitState] {
         guard currentMode == .bsp else { return [:] }
         var states: [String: SplitState] = [:]
         forEachInternalNode(root) { node in
             guard let leftmost = leftmostLeafWindowID(node.leftChild),
                   let rightmost = leftmostLeafWindowID(node.rightChild) else { return }
-            states["\(leftmost)|\(rightmost)"] = SplitState(
+            states[SplitStateKey.make(left: leftmost, right: rightmost)] = SplitState(
                 ratio: node.ratio ?? 0.5,
                 orientation: node.splitType ?? .vertical
             )
@@ -183,7 +187,7 @@ public final class Workspace: @unchecked Sendable {
         forEachInternalNode(root) { node in
             guard let leftmost = leftmostLeafWindowID(node.leftChild),
                   let rightmost = leftmostLeafWindowID(node.rightChild),
-                  let state = states["\(leftmost)|\(rightmost)"] else { return }
+                  let state = states[SplitStateKey.make(left: leftmost, right: rightmost)] else { return }
             node.ratio = state.ratio
             node.splitType = state.orientation
         }
