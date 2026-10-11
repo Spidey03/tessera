@@ -13,6 +13,31 @@ public struct WindowMapper {
         }
     }
 
+    // MARK: - Split state identity
+
+    /// Re-key captured split states from this pass's `MacWindow.id`s onto stable
+    /// identities (`MacWindow.stableID`).
+    ///
+    /// `id` is the `AXUIElement` pointer, rebuilt on every discovery pass, so
+    /// split states keyed on it match nothing on the next tile — which silently
+    /// reset every ratio to 50/50 and made `state.json` worthless. This is the
+    /// same translation `floaterKey` already applies to saved float frames.
+    ///
+    /// Entries naming an unknown window are dropped; the node then falls back to
+    /// its default ratio rather than attaching a stale weight to the wrong node.
+    public func stabilizeSplitStates(_ states: [String: SplitState]) -> [String: SplitState] {
+        return SplitStateMapper.rekey(states) { self.mapping[$0]?.stableID }
+    }
+
+    /// Inverse of `stabilizeSplitStates`: re-key stable identities back onto this
+    /// pass's ids, so a state captured before a re-tile can be applied to the tree
+    /// built from freshly discovered windows.
+    public func resolveSplitStates(_ states: [String: SplitState]) -> [String: SplitState] {
+        let byStableID = Dictionary(mapping.values.map { ($0.stableID, $0.id) },
+                                    uniquingKeysWith: { first, _ in first })
+        return SplitStateMapper.rekey(states) { byStableID[$0] }
+    }
+
     public func focusWindow(id: String) -> Bool {
         guard let macWin = mapping[id] else { return false }
         let appElement = AXUIElementCreateApplication(macWin.appPID)

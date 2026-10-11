@@ -338,7 +338,11 @@ final class Daemon: @unchecked Sendable {
     /// weights (see `Workspace.captureSplitState`).
     private func previousSplitStatesByDisplay() -> [CGDirectDisplayID: [String: SplitState]] {
         currentWorkspaces.reduce(into: [:]) { result, entry in
-            result[entry.key] = entry.value.captureSplitState()
+            // Re-key onto stable identities: `MacWindow.id` is the AXUIElement
+            // pointer and is rebuilt every discovery pass, so a state left keyed
+            // on it would never match the tree the next tile builds.
+            guard let mapper = currentMappers[entry.key] else { return }
+            result[entry.key] = mapper.stabilizeSplitStates(entry.value.captureSplitState())
         }
     }
 
@@ -349,8 +353,10 @@ final class Daemon: @unchecked Sendable {
         var splitStates: [String: [String: SplitState]] = [:]
         var floatRects: [String: FloatRect] = [:]
         for (displayID, result) in results {
-            splitStates[String(displayID)] = result.workspace.captureSplitState()
             let mapper = currentMappers[displayID]
+            // state.json outlives the process, so it must not name AXUIElement
+            // pointers that the next launch will never produce.
+            splitStates[String(displayID)] = mapper?.stabilizeSplitStates(result.workspace.captureSplitState()) ?? [:]
             for win in mapper?.allWindows ?? [] where result.floatedIDs.contains(win.id) {
                 let key = floaterKey(for: win)
                 let displayNumber = ScreenManager.display(containing: win.frame)?.id ?? displayID
