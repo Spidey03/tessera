@@ -6,15 +6,15 @@
 ![macOS 14.0+](https://img.shields.io/badge/macOS-14.0+-000000?logo=apple)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/Spidey03/tessera/pulls)
 
-**Tessera** is a lightning-fast, animation-free tiling window manager for macOS powered by a Binary Space Partitioning (BSP) tree and virtual workspaces. It bypasses macOS's sluggish Space animations entirely — compute, hide, show, resize. Instantly.
+**Tessera** is a lightning-fast, animation-free tiling window manager for macOS powered by a Binary Space Partitioning (BSP) tree with per-display workspaces. It avoids macOS's sluggish Space animations entirely — compute, position, resize. Instantly.
 
 ---
 
 ## Why Tessera?
 
-**Virtual Workspaces** — No slow macOS Space switching. All windows live on a single invisible canvas. Tessera instantly computes which windows to show, hide, and resize based on your active workspace. Zero animation, zero delay.
+**Per-Display Workspaces** — Each display has its own BSP tree and layout mode. Tessera tiles the windows on each display independently and never switches macOS Spaces.
 
-**Animation-Free** — macOS applies a 300-500ms animation every time you switch Spaces. Tessera doesn't switch Spaces. It hides and shows windows via the Accessibility API in a single frame.
+**Fast Relayouts** — macOS applies a 300-500ms animation every time you switch Spaces. Tessera doesn't switch Spaces. It moves and resizes windows through the Accessibility API; an optional slide animation is configurable in `config.json`.
 
 **Keyboard-Driven Focus** — Navigate windows with vector math, not tab order. Focus left, right, up, or down relative to your current position in the BSP tree. Every movement is deterministic and instant.
 
@@ -86,7 +86,7 @@ cd TesseraKit
 swift run TesseraDaemon
 ```
 
-> ⚠️ **Requirements**: The Swift daemon needs macOS **Accessibility** and **Input Monitoring** permissions. On macOS 15+ (this is "26"), TCC *only* honors those grants for processes born under a **granted GUI app** — a launchd child (LaunchAgent/LaunchDaemon/Login item) is **always denied**, no matter which entries you add in System Settings. Local/ad-hoc signed binaries also can't satisfy it (they carry no Apple-issued `TeamIdentifier`).
+> ⚠️ **Requirements**: The Swift daemon needs macOS **Accessibility** and **Input Monitoring** permissions. On macOS 15 and later, TCC *only* honors those grants for processes born under a **granted GUI app** — a launchd child (LaunchAgent/LaunchDaemon/Login item) is **always denied**, no matter which entries you add in System Settings. Local/ad-hoc signed binaries also can't satisfy it (they carry no Apple-issued `TeamIdentifier`).
 >
 > So: grant your **terminal**, and let the daemon ride that terminal's lineage:
 > ```
@@ -289,7 +289,7 @@ tessera/
 │       ├── window.py
 │       ├── workspace.py
 │       └── split_type.py
-├── tests/                      # Python tests (27)
+├── tests/                      # Python prototype tests
 ├── scripts/                  # LaunchAgent install/uninstall (daemon + menu bar app)
 ├── TesseraKit/               # Swift production code
 │   ├── Package.swift
@@ -298,7 +298,7 @@ tessera/
 │       ├── TesseraSystem/      # macOS AX layer
 │       ├── TesseraDaemon/      # Orchestrator + event loop
 │       ├── TesseraMenu/        # Menu bar status/control app
-│       ├── TesseraTests/       # 77 Swift tests
+│       ├── TesseraTests/       # Swift tests
 │       └── WindowDiscover/     # AX enumeration CLI
 └── README.md
 ```
