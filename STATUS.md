@@ -24,7 +24,7 @@
 - **CGEventTap** captures keyDown events; matched bindings dispatched via `CFRunLoopPerformBlock`
 - **Per-display BSP workspaces**: each display gets its own stateful `Workspace` + `WindowMapper`; windows are grouped to their containing display and tiled there
 - **WindowMapper**: bridges pure `Window` ↔ `MacWindow`; `applyLayout`/`computeLayout` apply BSP rects and detect overflow; sorts by (y, x, appName, title) for deterministic BSP
-- **Vim-style hotkeys**: H/I = focus left, J/M = focus right, K = up/prev, L = down/next; arrows cycle; remove (⌘⌥W); fullscreen (⌘⌥F); toggle split (⌘⌥Space); resize split (⌘⌥[ / ⌘⌥]); cycle layout on focused display (⌘⌥.); quit (⌘⌥⇧Q)
+- **Vim-style hotkeys**: H/K = focus left/previous, J/L = focus right/next; arrows cycle; remove (⌘⌥W); fullscreen (⌘⌥F); toggle split (⌘⌥Space); resize split (⌘⌥[ / ⌘⌥]); cycle layout on focused display (⌘⌥.); quit (⌘⌥⇧Q)
 - **Coordinate fix**: per-display rect conversion in top-left coordinates matching AX — eliminates menu-bar induced overlap in horizontal splits
 - **`floatingApps` config** (`floatingAppIDs: [String]`): floating apps stay out of the BSP tree and are screen-centered; legacy key auto-migrated into `appRules` as `.float`
 - **Per-app tiling rules** (`appRules` config, `AppTilingRule`): `normal` (tiled), `float` (out of BSP, keeps position), `ignore` (completely untouched/invisible to tiler), `sticky` (tiled but keeps its tile slot across re-tiles via order-preserving rebuild)
@@ -44,8 +44,8 @@
 - **Built-in updater**: "Check for Updates…" (manual) + "Automatically Check for Updates" (default on) query the latest GitHub release's `appcast.json`, and on Install & Restart download the `tessera-<version>-dist.zip`, extract it, swap the bundle in `~/Library/Application Support/Tessera`, and restart the daemon + menu from a detached helper. `scripts/build_release.sh` now always emits the dist zip + `appcast.json` (sha256, size) alongside the DMG. Pure model logic (`ReleaseVersion` compare, `UpdateAppcast.parse`) lives in TesseraKit and is unit-tested.
 
 ### Testing
-- 110 Swift tests (TesseraTests): BSP tree ops, spatial focus, split toggle, split-state capture/apply (ratio + orientation, surviving-pair stability, restart faithfulness), layout presets, hotkey model (defaults, flag normalization, override merge/freeing, combo display), keybinding matching, ScreenManager rect/wallpaper logic, slot-preserving order, subrole filtering, LayoutState round-trip/legacy decode, float-rect persistence, update model (version compare, appcast parse/decision)
-- 27 Python prototype tests (`tests/test_workspace.py`)
+- Swift tests (TesseraTests): BSP tree ops, spatial focus, split toggle, split-state capture/apply (ratio + orientation, surviving-pair stability, restart faithfulness), layout presets, hotkey model (defaults, flag normalization, override merge/freeing, combo display), keybinding matching, ScreenManager rect/wallpaper logic, slot-preserving order, subrole filtering, LayoutState round-trip/legacy decode, float-rect persistence, update model (version compare, appcast parse/decision)
+- Python prototype tests (`tests/test_workspace.py`)
 
 ## What's Left
 
