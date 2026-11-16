@@ -90,6 +90,50 @@ func testThirdWindowSplitsHorizontalOnFocused() throws {
     try assertLessThan(aRect.y, cRect.y)
 }
 
+func testRemoveWindowGivesSurvivorTheWholeArea() throws {
+    let monitor = Rect(x: 0, y: 0, width: 1920, height: 1080)
+    let ws = Workspace(monitorRect: monitor)
+    ws.addWindow(Window(id: "A"))
+    ws.addWindow(Window(id: "B"))
+
+    ws.removeWindow(id: "B")
+
+    let layout = ws.getLayout()
+    try assertEqual(layout.count, 1)
+    // The survivor must expand into the vacated half, landing on exactly the
+    // rect a single-window workspace produces. Before the fix it kept the
+    // 955px half it already had.
+    let single = Workspace(monitorRect: monitor)
+    single.addWindow(Window(id: "A"))
+    try assertEqual(layout[0].1, single.getLayout()[0].1)
+    try assertEqual(layout[0].1.width, 1904)
+}
+
+func testRemoveWindowReflowsCollapsedSubtree() throws {
+    let monitor = Rect(x: 0, y: 0, width: 1920, height: 1080)
+    let ws = Workspace(monitorRect: monitor)
+    // Four windows lay out as a 2x2 grid, so B's parent is the right column and
+    // its sibling D is a leaf. Removing B must hand D the whole column.
+    for id in ["A", "B", "C", "D"] { ws.addWindow(Window(id: id)) }
+    let dBefore = ws.getLayout().first { $0.0.id == "D" }!.1
+    try assertEqual(dBefore.height, 528)
+
+    ws.removeWindow(id: "B")
+
+    let layout = ws.getLayout()
+    try assertEqual(layout.count, 3)
+    try assertEqual(Set(layout.map(\.0.id)), ["A", "C", "D"])
+    // D absorbs the full column height instead of staying in its old half. This
+    // is the stale-rect case: copying the survivor's stored rect left D stranded.
+    try assertEqual(layout.first { $0.0.id == "D" }!.1.height, 1064)
+    // The left column is untouched — it never lost a sibling.
+    try assertEqual(layout.first { $0.0.id == "A" }!.1.height, 528)
+    for (_, rect) in layout {
+        try assert(rect.x + rect.width <= monitor.width, "rect \(rect) overflows the monitor width")
+        try assert(rect.y + rect.height <= monitor.height, "rect \(rect) overflows the monitor height")
+    }
+}
+
 func testFocusStaysOnExistingWindow() throws {
     let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080),
                        config: TesseraConfig(newWindowFocus: false))
@@ -1487,6 +1531,8 @@ let tests: [(String, () throws -> Void)] = [
     ("Second window splits vertically by default", testSecondWindowSplitsVerticallyByDefault),
     ("Third window splits horizontal on focused", testThirdWindowSplitsHorizontalOnFocused),
     ("Focus stays on existing window", testFocusStaysOnExistingWindow),
+    ("Remove gives survivor the whole area", testRemoveWindowGivesSurvivorTheWholeArea),
+    ("Remove reflows collapsed subtree", testRemoveWindowReflowsCollapsedSubtree),
     ("New window can get focus", testNewWindowCanGetFocus),
     ("Remove window collapses tree", testRemoveWindowCollapsesTree),
     ("Remove focused window collapses and refocuses", testRemoveFocusedWindowCollapsesAndRefocuses),
