@@ -1703,6 +1703,47 @@ func testTriggerAnalysisIsEquatable() throws {
     try assertEqual(a, b)
 }
 
+// MARK: - Config error status
+
+private struct ConfigErrorProbe: Codable {
+    var gapSize: Double?
+}
+
+func testMalformedConfigJSONReportsReason() throws {
+    let malformed = Data("{\"gapSize\": 8,".utf8)
+    let result = ConfigErrorStatus.decode(ConfigErrorProbe.self, from: malformed, path: "/tmp/config.json")
+    try assertNil(result.value)
+    guard let record = result.error else { throw TestError.assertionFailed("no error recorded for malformed JSON") }
+    try assertEqual(record.path, "/tmp/config.json")
+    try assert(!record.message.isEmpty, "error message is empty")
+}
+
+func testTypeMismatchReportsOffendingKey() throws {
+    let wrongType = Data("{\"gapSize\": \"wide\"}".utf8)
+    let result = ConfigErrorStatus.decode(ConfigErrorProbe.self, from: wrongType, path: "/tmp/config.json")
+    try assertNil(result.value)
+    guard let message = result.error?.message else { throw TestError.assertionFailed("no error recorded") }
+    try assert(message.contains("gapSize"), "message \"\(message)\" does not name the key")
+}
+
+func testValidConfigJSONReportsNoError() throws {
+    let valid = Data("{\"gapSize\": 8}".utf8)
+    let result = ConfigErrorStatus.decode(ConfigErrorProbe.self, from: valid, path: "/tmp/config.json")
+    try assertNil(result.error)
+    try assertEqual(result.value?.gapSize, 8)
+}
+
+func testConfigErrorRecordRoundTripsThroughFile() throws {
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent("tessera-config-error-test-\(UUID().uuidString)/config-error.json")
+    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+    let record = ConfigErrorRecord(path: "/x/config.json", message: "gapSize: bad")
+    ConfigErrorStatus.save(record, to: url)
+    try assertEqual(ConfigErrorStatus.read(from: url), record)
+    ConfigErrorStatus.save(nil, to: url)
+    try assertNil(ConfigErrorStatus.read(from: url))
+}
+
 let tests: [(String, () throws -> Void)] = [
     ("Every animation curve starts at 0 and lands on 1", testEveryCurveStartsAtZeroAndLandsOnOne),
     ("Every animation curve is monotonic (never overshoots)", testEveryCurveIsMonotonic),
@@ -1868,6 +1909,10 @@ let tests: [(String, () throws -> Void)] = [
     ("Menu bar glyph is a template with 1x and 2x reps", testMenuBarGlyphIsTemplateWithBothScales),
     ("Menu bar glyph gutters survive 1x rasterisation", testMenuBarGlyphGapsSurviveRasterisation),
     ("Glyph proportions hold across canvas sizes", testGlyphProportionsHoldAcrossCanvasSizes),
+    ("Malformed config JSON reports a reason", testMalformedConfigJSONReportsReason),
+    ("Type mismatch in config names the key", testTypeMismatchReportsOffendingKey),
+    ("Valid config JSON reports no error", testValidConfigJSONReportsNoError),
+    ("Config error record round-trips through its file", testConfigErrorRecordRoundTripsThroughFile),
 ]
 
 

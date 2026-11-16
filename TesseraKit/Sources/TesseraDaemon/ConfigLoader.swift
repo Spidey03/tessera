@@ -47,21 +47,29 @@ enum ConfigLoader {
     static let statePath = configDir.appendingPathComponent("state.json")
 
     static func load() -> LoadedConfig {
-        let fileConfig: TesseraConfigFile?
+        // Parse failures keep the defaults (the daemon must not stop), but are
+        // logged and recorded so the menu app can warn the user.
+        var fileConfig: TesseraConfigFile?
+        var configError: ConfigErrorRecord?
         if FileManager.default.fileExists(atPath: configPath.path) {
             do {
                 let data = try Data(contentsOf: configPath)
-                fileConfig = try JSONDecoder().decode(TesseraConfigFile.self, from: data)
-                print("[config] loaded from \(configPath.path)")
+                let decoded = ConfigErrorStatus.decode(TesseraConfigFile.self, from: data, path: configPath.path)
+                fileConfig = decoded.value
+                configError = decoded.error
             } catch {
-                print("[config] WARNING: failed to parse \(configPath.path): \(error)")
+                configError = ConfigErrorRecord(path: configPath.path, message: ConfigErrorStatus.describe(error))
+            }
+            if let configError {
+                print("[config] WARNING: failed to parse \(configError.path): \(configError.message)")
                 print("[config] falling back to defaults")
-                fileConfig = nil
+            } else {
+                print("[config] loaded from \(configPath.path)")
             }
         } else {
             print("[config] no config file at \(configPath.path) — using defaults")
-            fileConfig = nil
         }
+        ConfigErrorStatus.save(configError)
 
         let tesseraConfig = mergeConfig(fileConfig)
         let bindings = mergeBindings(fileConfig?.hotkeys)
