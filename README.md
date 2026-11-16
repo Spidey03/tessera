@@ -195,7 +195,7 @@ brew install --build-from-source /tmp/Tessera.rb
 
 **Release ritual** (when cutting a new version):
 
-1. Bump `version` in `TesseraKit/Sources/TesseraDaemon/main.swift`, `scripts/build_app.sh`, and `Formula/tessera.rb`; commit and push.
+1. Set the new version in the root `VERSION` file (the single source of truth; `scripts/build_app.sh` and `scripts/build_release.sh` read it). Then update the checked copies to match: `let version` in `TesseraKit/Sources/TesseraDaemon/main.swift`, `let tesseraMenuVersion` in `TesseraKit/Sources/TesseraMenu/main.swift`, and `version`/`url` in `Formula/tessera.rb` and `Casks/tessera.rb`. Run `scripts/check_version.sh` until it passes (CI runs it too); commit and push.
 2. Tag and push: `git tag v0.4.1 && git push origin v0.4.1`
 3. Upload the archive as an immutable **release asset** and pin the formula to it
    (tag-recreated tarballs are served stale by GitHub's cache, so releases use

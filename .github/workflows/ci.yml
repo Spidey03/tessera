@@ -17,6 +17,15 @@ jobs:
       - name: Run Swift tests
         run: swift run --package-path TesseraKit TesseraTests
 
+  version:
+    name: Version copies match VERSION
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check version copies
+        run: scripts/check_version.sh
+
   python:
     name: Python tests (prototype)
     runs-on: ubuntu-latest

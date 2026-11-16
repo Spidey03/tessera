@@ -25,7 +25,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VERSION="$(sed -n 's/^VERSION="\([^"]*\)"/\1/p' "$ROOT_DIR/scripts/build_app.sh")"
+VERSION="$(tr -d '[:space:]' < "$ROOT_DIR/VERSION")"
 
 OUT_DIR="${TESSERA_OUT_DIR:-$ROOT_DIR/dist}"
 [ "${1:-}" = "--out" ] && { OUT_DIR="$2"; shift 2; }

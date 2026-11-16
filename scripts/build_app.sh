@@ -25,7 +25,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 APP_NAME="Tessera"
-VERSION="0.4.0"
+VERSION="$(tr -d '[:space:]' < "$ROOT_DIR/VERSION")"  # single source of truth
 BIN_DIR="$HOME/Library/Application Support/Tessera"
 DEST="${TESSERA_DEST:-$BIN_DIR/$APP_NAME.app}"
 CONTENTS="$DEST/Contents"
