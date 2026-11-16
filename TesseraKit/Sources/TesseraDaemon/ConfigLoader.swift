@@ -23,6 +23,7 @@ struct TesseraConfigFile: Codable {
     var animationDuration: Double?
     var animationCurve: String?
     var animationStagger: Double?
+    var autoFloatOverflowThreshold: Double?
     var multiMonitor: MultiMonitorConfigFile?
     var appRules: [String: AppTilingRule]?
     var excludedSubroles: [String]?
@@ -183,10 +184,19 @@ enum ConfigLoader {
             animationDuration: fc.animationDuration ?? defaults.animationDuration,
             animationCurve: fc.animationCurve.map(AnimationCurve.init(configValue:)) ?? defaults.animationCurve,
             animationStagger: fc.animationStagger ?? defaults.animationStagger,
+            autoFloatOverflowThreshold: parseOverflowThreshold(fc.autoFloatOverflowThreshold),
             multiMonitor: MultiMonitorConfig(
                 focusMode: fc.multiMonitor?.focusMode ?? MultiMonitorConfig().focusMode
             )
         )
+    }
+
+    /// Parse `"autoFloatOverflowThreshold"`. Out-of-range values warn and use the default.
+    private static func parseOverflowThreshold(_ raw: Double?) -> Double {
+        if let raw, !raw.isFinite || !AutoFloat.overflowThresholdRange.contains(raw) {
+            print("[config] WARNING: autoFloatOverflowThreshold \(raw) outside \(AutoFloat.overflowThresholdRange) — using \(AutoFloat.defaultOverflowThreshold)")
+        }
+        return AutoFloat.overflowThreshold(from: raw)
     }
 
     /// Parse the `"layoutMode"` string. Unknown values warn and return nil

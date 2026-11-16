@@ -134,7 +134,8 @@ struct Tiler {
         }
 
         // Compute layout (resize for overflow detection but don't move windows)
-        var (targets, floated) = mapper.computeLayout(layout, screenRect: screenRect)
+        var (targets, floated) = mapper.computeLayout(layout, screenRect: screenRect,
+                                                      overflowThreshold: config.autoFloatOverflowThreshold)
         var allFloated = floated
         var finalTargets = targets
 
@@ -151,7 +152,8 @@ struct Tiler {
             resultWorkspace = makeWorkspace(displayID: display.id, ordered: remainingOrdered, screenRect: screenRect)
             let newLayout = resultWorkspace.getLayout()
             if newLayout.isEmpty { break }
-            (targets, floated) = mapper.computeLayout(newLayout, screenRect: screenRect)
+            (targets, floated) = mapper.computeLayout(newLayout, screenRect: screenRect,
+                                                      overflowThreshold: config.autoFloatOverflowThreshold)
             finalTargets = targets
             allFloated.formUnion(floated)
         }

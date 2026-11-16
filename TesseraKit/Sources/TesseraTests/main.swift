@@ -1790,7 +1790,37 @@ func testFirstLaunchFlagGatesAutomaticOnboarding() throws {
     try assert(PermissionOnboarding.terminalCaveat.contains("terminal"), "caveat names the terminal lineage")
 }
 
+func testAutoFloatStaysTiledAtOrBelowThreshold() throws {
+    try assertEqual(AutoFloat.shouldAutoFloat(overflow: 0, threshold: 50), false)
+    try assertEqual(AutoFloat.shouldAutoFloat(overflow: 5, threshold: 50), false)
+    // Exactly at the threshold is tolerated; only strictly more floats.
+    try assertEqual(AutoFloat.shouldAutoFloat(overflow: 50, threshold: 50), false)
+}
+
+func testAutoFloatFloatsAboveThreshold() throws {
+    try assertEqual(AutoFloat.shouldAutoFloat(overflow: 50.5, threshold: 50), true)
+    try assertEqual(AutoFloat.shouldAutoFloat(overflow: 200, threshold: 50), true)
+    // A zero threshold floats on any overflow at all.
+    try assertEqual(AutoFloat.shouldAutoFloat(overflow: 1, threshold: 0), true)
+}
+
+func testAutoFloatThresholdConfigParsing() throws {
+    try assertEqual(AutoFloat.overflowThreshold(from: nil), 50)
+    try assertEqual(AutoFloat.overflowThreshold(from: 120), 120)
+    try assertEqual(AutoFloat.overflowThreshold(from: 0), 0)
+    try assertEqual(AutoFloat.overflowThreshold(from: 500), 500)
+    // Out-of-range, non-finite values fall back to the default of 50.
+    try assertEqual(AutoFloat.overflowThreshold(from: -1), 50)
+    try assertEqual(AutoFloat.overflowThreshold(from: 501), 50)
+    try assertEqual(AutoFloat.overflowThreshold(from: .nan), 50)
+    try assertEqual(AutoFloat.overflowThreshold(from: .infinity), 50)
+    try assertEqual(TesseraConfig().autoFloatOverflowThreshold, 50)
+}
+
 let tests: [(String, () throws -> Void)] = [
+    ("Auto-float stays tiled at or below the threshold", testAutoFloatStaysTiledAtOrBelowThreshold),
+    ("Auto-float floats windows above the threshold", testAutoFloatFloatsAboveThreshold),
+    ("Auto-float threshold parses and falls back to 50 when out of range", testAutoFloatThresholdConfigParsing),
     ("Every animation curve starts at 0 and lands on 1", testEveryCurveStartsAtZeroAndLandsOnOne),
     ("Every animation curve is monotonic (never overshoots)", testEveryCurveIsMonotonic),
     ("Animation curves clamp out-of-range progress", testCurveClampsOutOfRangeProgress),
