@@ -1,4 +1,5 @@
 import AppKit
+import TesseraKit
 import TesseraUI
 
 /// Builds and manages the status item + menu. Re-renders state whenever the
@@ -18,6 +19,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let checkForUpdatesItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
     private let autoCheckItem = NSMenuItem(title: "Automatically Check for Updates", action: #selector(toggleAutoCheck), keyEquivalent: "")
     private let versionItem = NSMenuItem(title: "Tessera \(tesseraMenuVersion)", action: nil, keyEquivalent: "")
+    /// Shown first in the menu, and hidden, while the daemon reports a config.json parse error.
+    private let configErrorItem = NSMenuItem(title: "Config has errors — Open config.json", action: #selector(openConfig), keyEquivalent: "")
+    private let configErrorSeparator = NSMenuItem.separator()
     private let updates = AutoUpdater()
 
     init(control: DaemonControl) {
@@ -37,6 +41,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
         let menu = NSMenu()
         menu.delegate = self
+        configErrorItem.target = self
+        configErrorItem.isHidden = true
+        configErrorSeparator.isHidden = true
+        menu.addItem(configErrorItem)
+        menu.addItem(configErrorSeparator)
         for item in [tileItem, reloadItem, cycleLayoutItem] {
             item.target = self
             menu.addItem(item)
@@ -120,7 +129,14 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         startStopItem.title = running ? "Stop Daemon" : "Start Daemon"
         startStopItem.isEnabled = true
         startAtLoginItem.state = control.isStartAtLoginEnabled ? .on : .off
-        statusItem.button?.toolTip = running ? "Tessera — running" : "Tessera — stopped"
+        // The daemon writes this file on every config load and clears it on success,
+        // so the warning follows the last load whether or not the daemon is running.
+        let configError = ConfigErrorStatus.read()
+        configErrorItem.isHidden = configError == nil
+        configErrorSeparator.isHidden = configError == nil
+        let state = running ? "running" : "stopped"
+        statusItem.button?.toolTip = configError.map { "Tessera — \(state) · Config has errors (\($0.path))" }
+            ?? "Tessera — \(state)"
 
         autoCheckItem.state = updates.automaticChecksEnabled ? .on : .off
         versionItem.title = updates.pendingUpdate != nil
