@@ -354,9 +354,10 @@ final class Daemon: @unchecked Sendable {
         var floatRects: [String: FloatRect] = [:]
         for (displayID, result) in results {
             let mapper = currentMappers[displayID]
-            // state.json outlives the process, so it must not name AXUIElement
-            // pointers that the next launch will never produce.
-            splitStates[String(displayID)] = mapper?.stabilizeSplitStates(result.workspace.captureSplitState()) ?? [:]
+            // state.json outlives the process, so it names windows by title-based
+            // identity: window numbers are not valid after a relaunch.
+            splitStates[String(displayID)] = mapper?.stabilizeSplitStates(
+                result.workspace.captureSplitState(), identity: { $0.stableID }) ?? [:]
             for win in mapper?.allWindows ?? [] where result.floatedIDs.contains(win.id) {
                 let key = floaterKey(for: win)
                 let displayNumber = ScreenManager.display(containing: win.frame)?.id ?? displayID

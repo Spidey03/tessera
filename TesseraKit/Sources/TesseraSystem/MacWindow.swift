@@ -14,6 +14,28 @@ public struct MacWindow {
     public let isFocused: Bool
     public let isGloballyFocused: Bool
     public let isMinimized: Bool
+    /// `CGWindowID` of the window (via `_AXUIElementGetWindow`). Unique per window
+    /// and independent of its title. Nil if the lookup failed.
+    public var windowNumber: CGWindowID? = nil
+
+    public init(windowRef: AXUIElement, appPID: pid_t, appName: String, bundleID: String?,
+                title: String, role: String?, subrole: String?, position: CGPoint, size: CGSize,
+                isFocused: Bool, isGloballyFocused: Bool, isMinimized: Bool,
+                windowNumber: CGWindowID? = nil) {
+        self.windowRef = windowRef
+        self.appPID = appPID
+        self.appName = appName
+        self.bundleID = bundleID
+        self.title = title
+        self.role = role
+        self.subrole = subrole
+        self.position = position
+        self.size = size
+        self.isFocused = isFocused
+        self.isGloballyFocused = isGloballyFocused
+        self.isMinimized = isMinimized
+        self.windowNumber = windowNumber
+    }
 
     public var frame: CGRect {
         CGRect(origin: position, size: size)
@@ -32,6 +54,15 @@ public struct MacWindow {
     /// layout-order key already accept.
     public var stableID: String {
         "\(appName)|\(title)"
+    }
+
+    /// Identity for split-state keys within one daemon session. Uses the window
+    /// number when available: it is title-independent (terminal and browser titles
+    /// change constantly) and unique per window. Falls back to `stableID` only when
+    /// the lookup failed, in which case duplicate titles are caught by the caller.
+    public var splitIdentity: String {
+        if let windowNumber { return "win:\(windowNumber)" }
+        return stableID
     }
 
     @discardableResult

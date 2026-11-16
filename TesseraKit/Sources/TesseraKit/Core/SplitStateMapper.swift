@@ -7,7 +7,7 @@ import Foundation
 /// pass, so a state captured before a re-tile names windows the rebuilt tree
 /// does not contain, and the ratio is silently dropped back to 50/50.
 ///
-/// The daemon maps ids to and from `MacWindow.stableID` around that boundary.
+/// The daemon maps ids to and from `MacWindow.splitIdentity` around that boundary.
 /// This lives in TesseraKit — rather than in the daemon's `WindowMapper` — so it
 /// is reachable from the test target, which cannot import the daemon executable.
 public enum SplitStateMapper {
@@ -19,10 +19,8 @@ public enum SplitStateMapper {
     /// instead of a ratio captured for a different pair of windows being applied
     /// to whatever node happens to reuse that key.
     ///
-    /// A colliding `translation` (two windows mapping to one key) overwrites, so
-    /// the last window scanned wins. `MacWindow.stableID` is `"appName|title"`,
-    /// so same-titled windows in one app do collide — the same limitation
-    /// `floaterKey` carries.
+    /// Callers build `translation` with `unambiguousMap`, so two windows never
+    /// share a target key here: an identity claimed twice is left out entirely.
     public static func rekey(_ states: [String: SplitState],
                              using translation: (String) -> String?) -> [String: SplitState] {
         var out: [String: SplitState] = [:]
@@ -32,6 +30,17 @@ public enum SplitStateMapper {
                   let right = translation(parts.right) else { continue }
             out[SplitStateKey.make(left: left, right: right)] = state
         }
+        return out
+    }
+
+    /// Maps each `from` to its `to`, leaving out any `to` claimed by more than one
+    /// `from`. An ambiguous identity must not be guessed at: states keyed on it are
+    /// dropped and their nodes fall back to the default ratio.
+    public static func unambiguousMap(_ pairs: [(from: String, to: String)]) -> [String: String] {
+        var claims: [String: Int] = [:]
+        for pair in pairs { claims[pair.to, default: 0] += 1 }
+        var out: [String: String] = [:]
+        for pair in pairs where claims[pair.to] == 1 { out[pair.from] = pair.to }
         return out
     }
 

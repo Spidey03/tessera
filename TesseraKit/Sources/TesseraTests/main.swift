@@ -185,6 +185,84 @@ func testSplitStateKeyRejectsForeignKeys() throws {
     try assert(SplitStateKey.parse("lonely") == nil)
 }
 
+/// Builds a `MacWindow` with only the fields identity depends on.
+private func identityWindow(title: String, windowNumber: CGWindowID?) -> MacWindow {
+    MacWindow(
+        windowRef: AXUIElementCreateApplication(getpid()),
+        appPID: getpid(),
+        appName: "kitty",
+        bundleID: nil,
+        title: title,
+        role: nil,
+        subrole: nil,
+        position: .zero,
+        size: .zero,
+        isFocused: false,
+        isGloballyFocused: false,
+        isMinimized: false,
+        windowNumber: windowNumber
+    )
+}
+
+func testSplitIdentityIgnoresTitle() throws {
+    // Terminal and browser titles change between passes. Same window number, new
+    // title must still produce the same split identity.
+    let before = identityWindow(title: "~/Projects/tessera", windowNumber: 101)
+    let after = identityWindow(title: "OC | Tessera BSP", windowNumber: 101)
+    try assertEqual(before.splitIdentity, after.splitIdentity)
+}
+
+func testSplitIdentityKeepsSameTitledWindowsApart() throws {
+    // Two "OC" windows in one app used to share the key "kitty|OC".
+    let a = identityWindow(title: "OC", windowNumber: 101)
+    let b = identityWindow(title: "OC", windowNumber: 102)
+    try assert(a.splitIdentity != b.splitIdentity, "same-titled windows must not share an identity")
+}
+
+func testAmbiguousFallbackIdentitiesAreDropped() throws {
+    // Without a window number the fallback is the title. Two windows sharing it
+    // must be left out of the map, so their split states are dropped rather than
+    // applied to whichever window was scanned first.
+    let x = identityWindow(title: "OC", windowNumber: nil)
+    let y = identityWindow(title: "OC", windowNumber: nil)
+    let table = SplitStateMapper.unambiguousMap([(from: "0xX", to: x.splitIdentity), (from: "0xY", to: y.splitIdentity)])
+    try assertEqual(table.count, 0)
+
+    let states = [SplitStateKey.make(left: "0xX", right: "0xY"): SplitState(ratio: 0.7, orientation: .vertical)]
+    try assertEqual(SplitStateMapper.rekey(states) { table[$0] }.count, 0)
+}
+
+func testUnambiguousMapKeepsUniqueIdentities() throws {
+    let table = SplitStateMapper.unambiguousMap([(from: "0xA", to: "win:101"),
+                                                 (from: "0xB", to: "win:102"),
+                                                 (from: "0xC", to: "win:102")])
+    try assertEqual(table["0xA"], "win:101")
+    try assertEqual(table["0xB"], nil)
+    try assertEqual(table["0xC"], nil)
+}
+
+func testSplitStateSurvivesTitleChangeAcrossPasses() throws {
+    // Pass 1: windows 101/102 with pointer ids 0xAAA/0xBBB and titles "a"/"b".
+    let monitor = Rect(x: 0, y: 0, width: 1920, height: 1080)
+    let first = Workspace(monitorRect: monitor)
+    first.applyPreset(.bsp, orderedIDs: ["0xAAA", "0xBBB"])
+    first.focusWindow(id: "0xAAA")
+    first.resizeSplit(delta: 0.2)
+    let toIdentity = SplitStateMapper.unambiguousMap([(from: "0xAAA", to: "win:101"),
+                                                      (from: "0xBBB", to: "win:102")])
+    let carried = SplitStateMapper.rekey(first.captureSplitState()) { toIdentity[$0] }
+    try assertEqual(carried.count, 1)
+
+    // Pass 2: same window numbers, new pointers, and titles that have changed.
+    // The identity table is built from window numbers, so titles play no part.
+    let second = Workspace(monitorRect: monitor)
+    second.applyPreset(.bsp, orderedIDs: ["0xZZZ", "0xYYY"])
+    let toPointer = SplitStateMapper.unambiguousMap([(from: "win:101", to: "0xZZZ"),
+                                                     (from: "win:102", to: "0xYYY")])
+    second.applySplitState(SplitStateMapper.rekey(carried) { toPointer[$0] })
+    try assertEqual(Int(second.getLayout().first { $0.0.id == "0xZZZ" }!.1.width.rounded()), 1330)
+}
+
 func testCapturedSplitStateSurvivesAFreshDiscoveryPass() throws {
     // The regression: real ids are AXUIElement pointers that change on every
     // discovery pass, so a state captured from one pass never matches the next.
@@ -1657,6 +1735,11 @@ let tests: [(String, () throws -> Void)] = [
     ("Split state key survives pipes in names", testSplitStateKeySurvivesPipesInNames),
     ("Split state key rejects foreign keys", testSplitStateKeyRejectsForeignKeys),
     ("Captured split state survives a fresh pass", testCapturedSplitStateSurvivesAFreshDiscoveryPass),
+    ("Split identity ignores title", testSplitIdentityIgnoresTitle),
+    ("Split identity keeps same-titled windows apart", testSplitIdentityKeepsSameTitledWindowsApart),
+    ("Ambiguous fallback identities are dropped", testAmbiguousFallbackIdentitiesAreDropped),
+    ("Unambiguous map keeps unique identities", testUnambiguousMapKeepsUniqueIdentities),
+    ("Split state survives title change across passes", testSplitStateSurvivesTitleChangeAcrossPasses),
     ("Resize ratio survives apply via stable keys", testResizeRatioSurvivesApplyThroughStableKeys),
     ("New window can get focus", testNewWindowCanGetFocus),
     ("Remove window collapses tree", testRemoveWindowCollapsesTree),

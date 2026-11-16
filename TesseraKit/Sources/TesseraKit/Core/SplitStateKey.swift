@@ -9,9 +9,9 @@ import Foundation
 ///
 /// ## Why the separator is not `|`
 ///
-/// The daemon remaps these ids to `MacWindow.stableID` (`"appName|title"`) so
-/// they survive a discovery pass, and an app name or window title can contain
-/// `|` freely. Joining the two halves with `|` would make `"a|b|c"` ambiguous
+/// The daemon remaps these ids to `MacWindow.splitIdentity` so they survive a
+/// discovery pass. Fallback identities are `"appName|title"`, and an app name or
+/// window title can contain `|` freely. Joining the two halves with `|` would make `"a|b|c"` ambiguous
 /// and impossible to parse back. `U+001E` is a record separator: not something
 /// a user types into a window title.
 public enum SplitStateKey {
