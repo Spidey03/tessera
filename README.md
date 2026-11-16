@@ -251,6 +251,7 @@ All hotkeys are remappable. The **Settings** window (menu bar icon → Settings,
 - **New window** splits the largest leaf by area for balanced tile sizes.
 - **Focus** stays on the existing window after a split (configurable via `~/.config/tessera/config.json`).
 - **Gaps**: 8px between windows, 4px outer margin (configurable).
+- **Auto-float**: a tiled window that extends more than `autoFloatOverflowThreshold` px (default `5`, range `0`–`500`) past the screen edge floats instead, and each float is logged with its overflow and threshold.
 
 ---
 

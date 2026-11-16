@@ -50,6 +50,9 @@ public struct TesseraConfig: Sendable, Equatable {
     public var animationCurve: AnimationCurve
     /// Per-window delay in seconds, producing a stagger. 0 disables it.
     public var animationStagger: Double
+    /// Pixels a tiled window may extend past the screen edge before it is
+    /// auto-floated. See `AutoFloat`.
+    public var autoFloatOverflowThreshold: Double
     public var multiMonitor: MultiMonitorConfig
 
     public init(
@@ -70,6 +73,7 @@ public struct TesseraConfig: Sendable, Equatable {
         animationDuration: Double = 0.15,
         animationCurve: AnimationCurve = .default,
         animationStagger: Double = 0.0,
+        autoFloatOverflowThreshold: Double = AutoFloat.defaultOverflowThreshold,
         multiMonitor: MultiMonitorConfig = MultiMonitorConfig()
     ) {
         self.gapSize = gapSize
@@ -89,6 +93,7 @@ public struct TesseraConfig: Sendable, Equatable {
         self.animationDuration = animationDuration
         self.animationCurve = animationCurve
         self.animationStagger = animationStagger
+        self.autoFloatOverflowThreshold = autoFloatOverflowThreshold
         self.multiMonitor = multiMonitor
     }
 
@@ -110,6 +115,7 @@ public struct TesseraConfig: Sendable, Equatable {
             lhs.animationDuration == rhs.animationDuration &&
             lhs.animationCurve == rhs.animationCurve &&
             lhs.animationStagger == rhs.animationStagger &&
+            lhs.autoFloatOverflowThreshold == rhs.autoFloatOverflowThreshold &&
             lhs.multiMonitor == rhs.multiMonitor
     }
 

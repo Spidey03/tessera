@@ -689,7 +689,8 @@ final class Daemon: @unchecked Sendable {
             // computeLayout, not applyLayout: survivors get *larger* tiles here,
             // so their sizes must be recomputed. It returns target origins
             // without moving anything, which is what lets them glide.
-            let (targets, floatedIDs) = mapper.computeLayout(layout, screenRect: screenRect)
+            let (targets, floatedIDs) = mapper.computeLayout(layout, screenRect: screenRect,
+                                                             overflowThreshold: tiler.config.autoFloatOverflowThreshold)
             currentMappers[displayID] = mapper
             centerNewFloaters(displayID: displayID, newlyFloated: floatedIDs)
 
@@ -823,7 +824,8 @@ final class Daemon: @unchecked Sendable {
 
         let layout = ws.getLayout()
         let screenRect = screenRect(for: displayID)
-        let (targets, _) = mapper.computeLayout(layout, screenRect: screenRect)
+        let (targets, _) = mapper.computeLayout(layout, screenRect: screenRect,
+                                                overflowThreshold: tiler.config.autoFloatOverflowThreshold)
         currentMappers[displayID] = mapper
 
         // A tree mutation (split toggle, split resize) is a relayout: the same
@@ -849,7 +851,8 @@ final class Daemon: @unchecked Sendable {
                 print("[fullscreen] exiting — restoring tile position")
                 observer.isSuppressed = true
                 let screenRect = screenRect(for: displayID)
-                mapper.applyLayout(ws.getLayout(), screenRect: screenRect)
+                mapper.applyLayout(ws.getLayout(), screenRect: screenRect,
+                                   overflowThreshold: tiler.config.autoFloatOverflowThreshold)
                 currentMappers[displayID] = mapper
                 observer.isSuppressed = false
                 return

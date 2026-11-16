@@ -95,11 +95,10 @@ public struct WindowMapper {
     /// Like applyLayout but does NOT move windows — only resizes them for overflow detection
     /// and returns the target positions. Use animateTo to smoothly move windows to these targets.
     @discardableResult
-    public mutating func computeLayout(_ layout: [(Window, Rect)], screenRect: Rect) -> (targets: [String: CGPoint], floatedIDs: Set<String>) {
+    public mutating func computeLayout(_ layout: [(Window, Rect)], screenRect: Rect, overflowThreshold: Double) ->(targets: [String: CGPoint], floatedIDs: Set<String>) {
         var targets: [String: CGPoint] = [:]
         var floatedIDs: Set<String> = []
         var moved = 0
-        let tolerance: CGFloat = 5
         let visibleBounds = CGRect(x: screenRect.x, y: screenRect.y,
                                    width: screenRect.width, height: screenRect.height)
 
@@ -118,9 +117,10 @@ public struct WindowMapper {
                 let screenBottom = visibleBounds.origin.y + visibleBounds.height
                 let screenRight = visibleBounds.origin.x + visibleBounds.width
 
-                if windowBottom > screenBottom + tolerance || windowRight > screenRight + tolerance {
+                let overflow = Double(max(windowBottom - screenBottom, windowRight - screenRight))
+                if AutoFloat.shouldAutoFloat(overflow: overflow, threshold: overflowThreshold) {
                     floatedIDs.insert(pureWin.id)
-                    print("[mapper]   \(macWin.appName): \"\(macWin.title)\" → out of bounds, keeping at (\(Int(macWin.position.x)),\(Int(macWin.position.y)))")
+                    print("[mapper]   \(macWin.appName): \"\(macWin.title)\" → auto-float: overflows screen by \(Int(overflow))px (threshold \(Int(overflowThreshold))px), keeping at (\(Int(macWin.position.x)),\(Int(macWin.position.y)))")
                 } else if cgRect.width > 0 && cgRect.height > 0 &&
                           (actualSize.width < cgRect.width * 0.5 || actualSize.height < cgRect.height * 0.5) {
                     floatedIDs.insert(pureWin.id)
@@ -142,10 +142,9 @@ public struct WindowMapper {
     }
 
     @discardableResult
-    public mutating func applyLayout(_ layout: [(Window, Rect)], screenRect: Rect) -> Set<String> {
+    public mutating func applyLayout(_ layout: [(Window, Rect)], screenRect: Rect, overflowThreshold: Double) -> Set<String> {
         var floatedIDs: Set<String> = []
         var moved = 0
-        let tolerance: CGFloat = 5
         let visibleBounds = CGRect(x: screenRect.x, y: screenRect.y,
                                    width: screenRect.width, height: screenRect.height)
 
@@ -165,9 +164,10 @@ public struct WindowMapper {
                 let screenBottom = visibleBounds.origin.y + visibleBounds.height
                 let screenRight = visibleBounds.origin.x + visibleBounds.width
 
-                if windowBottom > screenBottom + tolerance || windowRight > screenRight + tolerance {
+                let overflow = Double(max(windowBottom - screenBottom, windowRight - screenRight))
+                if AutoFloat.shouldAutoFloat(overflow: overflow, threshold: overflowThreshold) {
                     floatedIDs.insert(pureWin.id)
-                    print("[mapper]   \(macWin.appName): \"\(macWin.title)\" → out of bounds, keeping at (\(Int(macWin.position.x)),\(Int(macWin.position.y)))")
+                    print("[mapper]   \(macWin.appName): \"\(macWin.title)\" → auto-float: overflows screen by \(Int(overflow))px (threshold \(Int(overflowThreshold))px), keeping at (\(Int(macWin.position.x)),\(Int(macWin.position.y)))")
                 } else if cgRect.width > 0 && cgRect.height > 0 &&
                           (actualSize.width < cgRect.width * 0.5 || actualSize.height < cgRect.height * 0.5) {
                     floatedIDs.insert(pureWin.id)
