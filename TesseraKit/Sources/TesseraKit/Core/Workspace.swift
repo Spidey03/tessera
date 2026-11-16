@@ -117,7 +117,6 @@ public final class Workspace: @unchecked Sendable {
         // vacated area; when it is a subtree it recursively re-derives every
         // descendant, which copying the fields alone would leave stale.
         reflow(parentNode, in: vacatedRect, gap: config.gapSize / 2.0)
-        print("[bsp] remove → survivor takes \(vacatedRect)")
 
         return removed
     }
