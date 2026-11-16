@@ -1744,6 +1744,52 @@ func testConfigErrorRecordRoundTripsThroughFile() throws {
     try assertNil(ConfigErrorStatus.read(from: url))
 }
 
+func testOnboardingRowsAreFixedAndLinkToSettingsPanes() throws {
+    let rows = PermissionOnboarding.rows(accessibility: .granted, inputMonitoring: .granted)
+    try assertEqual(rows.map(\.grant), [.accessibility, .inputMonitoring])
+    try assertEqual(rows[0].settingsURL,
+                    "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+    try assertEqual(rows[1].settingsURL,
+                    "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")
+    try assertEqual(rows[1].title, "Input Monitoring")
+}
+
+func testOnboardingStatusTextForEveryGrantState() throws {
+    try assertEqual(PermissionOnboarding.statusText(for: .accessibility, status: .granted), "Granted")
+    try assertEqual(PermissionOnboarding.statusText(for: .inputMonitoring, status: .granted), "Granted")
+    try assert(PermissionOnboarding.statusText(for: .accessibility, status: .notGranted).hasPrefix("Not granted"),
+               "accessibility not-granted text")
+    try assert(PermissionOnboarding.statusText(for: .inputMonitoring, status: .notGranted).hasPrefix("Not granted"),
+               "input monitoring not-granted text")
+    let unknown = PermissionOnboarding.statusText(for: .inputMonitoring, status: .unknown)
+    try assert(unknown.hasPrefix("Unknown"), "unknown status must say so")
+    try assert(!unknown.contains("Granted"), "unknown must not read as granted")
+}
+
+func testOnboardingRowCarriesProbedStatus() throws {
+    let rows = PermissionOnboarding.rows(accessibility: .notGranted, inputMonitoring: .unknown)
+    try assertEqual(rows[0].status, .notGranted)
+    try assertEqual(rows[1].status, .unknown)
+    try assertEqual(rows[1].statusText, PermissionOnboarding.statusText(for: .inputMonitoring, status: .unknown))
+}
+
+func testOnboardingSummaryCombinations() throws {
+    try assertEqual(PermissionOnboarding.summary(accessibility: .granted, inputMonitoring: .granted),
+                    "All permissions granted.")
+    try assert(PermissionOnboarding.summary(accessibility: .notGranted, inputMonitoring: .granted)
+        .hasPrefix("Permissions still needed"), "missing accessibility should ask for more")
+    try assert(PermissionOnboarding.summary(accessibility: .granted, inputMonitoring: .notGranted)
+        .hasPrefix("Permissions still needed"), "missing input monitoring should ask for more")
+    try assert(PermissionOnboarding.summary(accessibility: .granted, inputMonitoring: .unknown)
+        .contains("cannot be verified"), "unknown alone should not claim success or failure")
+}
+
+func testFirstLaunchFlagGatesAutomaticOnboarding() throws {
+    try assert(PermissionOnboarding.shouldShowOnFirstLaunch(hasShownBefore: false), "first launch shows window")
+    try assert(!PermissionOnboarding.shouldShowOnFirstLaunch(hasShownBefore: true), "later launches stay quiet")
+    try assert(PermissionOnboarding.terminalCaveat.contains("terminal"), "caveat names the terminal lineage")
+}
+
 let tests: [(String, () throws -> Void)] = [
     ("Every animation curve starts at 0 and lands on 1", testEveryCurveStartsAtZeroAndLandsOnOne),
     ("Every animation curve is monotonic (never overshoots)", testEveryCurveIsMonotonic),
@@ -1913,6 +1959,11 @@ let tests: [(String, () throws -> Void)] = [
     ("Type mismatch in config names the key", testTypeMismatchReportsOffendingKey),
     ("Valid config JSON reports no error", testValidConfigJSONReportsNoError),
     ("Config error record round-trips through its file", testConfigErrorRecordRoundTripsThroughFile),
+    ("Onboarding rows are fixed and link to the right panes", testOnboardingRowsAreFixedAndLinkToSettingsPanes),
+    ("Onboarding status text covers granted, denied and unknown", testOnboardingStatusTextForEveryGrantState),
+    ("Onboarding row carries the probed status", testOnboardingRowCarriesProbedStatus),
+    ("Onboarding summary covers each combination", testOnboardingSummaryCombinations),
+    ("First-launch flag gates automatic onboarding", testFirstLaunchFlagGatesAutomaticOnboarding),
 ]
 
 

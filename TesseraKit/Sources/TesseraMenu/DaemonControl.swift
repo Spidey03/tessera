@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import TesseraKit
 
 /// Paths and control plumbing shared with the Tessera daemon:
 ///  - raw file paths (PID file, config, logs)
@@ -275,12 +276,12 @@ final class DaemonControl: NSObject, @unchecked Sendable {
     }
 
     func openAccessibilityPreferencePane() {
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") else { return }
+        guard let url = URL(string: PermissionOnboarding.settingsURL(for: .accessibility)) else { return }
         NSWorkspace.shared.open(url)
     }
 
     func openInputMonitoringPreferencePane() {
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_InputMonitoring") else { return }
+        guard let url = URL(string: PermissionOnboarding.settingsURL(for: .inputMonitoring)) else { return }
         NSWorkspace.shared.open(url)
     }
 

@@ -59,6 +59,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.addItem(startStopItem)
         menu.addItem(.separator())
 
+        let setupPermsItem = NSMenuItem(title: "Setup Permissions…", action: #selector(showPermissionsOnboarding), keyEquivalent: "")
+        setupPermsItem.target = self
+        menu.addItem(setupPermsItem)
+
         let permItem = NSMenuItem(title: "Grant Permissions", action: nil, keyEquivalent: "")
         let permMenu = NSMenu()
         let permItems: [(String, Selector)] = [
@@ -190,6 +194,15 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     @objc private func openLogs() {
         control.openLogs()
+    }
+
+    private var onboardingController: PermissionsOnboardingWindowController?
+
+    @objc func showPermissionsOnboarding() {
+        if onboardingController == nil {
+            onboardingController = PermissionsOnboardingWindowController()
+        }
+        onboardingController?.show()
     }
 
     @objc private func openAccessibilitySettings() {

@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import TesseraKit
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -17,6 +18,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItemController = StatusItemController(control: control)
         if showSettingsOnLaunch {
             statusItemController.showSettingsWindow()
+        }
+        // First-run checklist: shown once, then only from "Setup Permissions…".
+        let defaults = UserDefaults.standard
+        let key = PermissionOnboarding.firstLaunchDefaultsKey
+        if PermissionOnboarding.shouldShowOnFirstLaunch(hasShownBefore: defaults.bool(forKey: key)) {
+            defaults.set(true, forKey: key)
+            statusItemController.showPermissionsOnboarding()
         }
         // Auto-start the daemon only when the menu itself runs under a granted
         // parent (e.g. launched from a permissioned Terminal). When the menu is
