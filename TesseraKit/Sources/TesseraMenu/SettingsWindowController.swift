@@ -420,10 +420,17 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         }
         let spec = HotkeySpec(keyCode: UInt16(event.keyCode), flags: names)
 
-        // Informational only: the claim is still applied, and on Save the
-        // merge frees the displaced key exactly as before.
         let conflict = HotkeyConflicts.check(action: action, keyCode: spec.keyCode,
                                              flags: names, against: mergedHotkeys())
+        // Exact combo already bound to another action: refuse, as before.
+        if let existing = conflict.refusedBy {
+            // Cancel first: cancelHotkeyRecording() clears the status line.
+            cancelHotkeyRecording()
+            statusLabel.stringValue = "\(existing.action) already uses \(existing.display)."
+            return
+        }
+        // Same key with other modifiers and system shortcuts: warn, but apply.
+        // On Save the merge frees any displaced key exactly as before.
         settings.hotkeys[action] = spec
         hotkeyWarnings[action] = conflictWarning(for: conflict)
         cancelHotkeyRecording()

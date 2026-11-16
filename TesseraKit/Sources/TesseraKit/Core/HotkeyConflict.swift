@@ -9,13 +9,20 @@ public struct HotkeyConflict: Equatable, Sendable {
     /// Display form (e.g. `"⌘Space"`) of a known macOS system shortcut that
     /// the combo matches exactly, if any.
     public var systemShortcut: String?
+    /// The existing binding of a *different* action that uses exactly this
+    /// combo (same key code and modifier set). When set, the claim must be
+    /// refused rather than applied.
+    public var refusedBy: HotkeyBinding?
 
-    public init(displacedActions: [String] = [], systemShortcut: String? = nil) {
+    public init(displacedActions: [String] = [],
+                systemShortcut: String? = nil,
+                refusedBy: HotkeyBinding? = nil) {
         self.displacedActions = displacedActions
         self.systemShortcut = systemShortcut
+        self.refusedBy = refusedBy
     }
 
-    public var isEmpty: Bool { displacedActions.isEmpty && systemShortcut == nil }
+    public var isEmpty: Bool { displacedActions.isEmpty && systemShortcut == nil && refusedBy == nil }
 }
 
 public enum HotkeyConflicts {
@@ -50,10 +57,16 @@ public enum HotkeyConflicts {
             .sorted()
 
         let normalized = Set(HotkeyBindings.normalizedFlags(flags))
+        let exact = bindings.first {
+            $0.keyCode == keyCode && $0.action != action
+                && Set(HotkeyBindings.normalizedFlags($0.flags)) == normalized
+        }
         let system = systemShortcuts.first {
             $0.keyCode == keyCode && Set($0.flags) == normalized
         }?.display
 
-        return HotkeyConflict(displacedActions: displaced, systemShortcut: system)
+        return HotkeyConflict(displacedActions: displaced,
+                              systemShortcut: system,
+                              refusedBy: exact)
     }
 }

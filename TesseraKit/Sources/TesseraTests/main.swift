@@ -1497,29 +1497,33 @@ func testHotkeyConflictNoneForFreeCombo() throws {
     try assertEqual(conflict.systemShortcut, nil)
 }
 
-func testHotkeyConflictReportsDisplacedAction() throws {
-    // Claiming ⌘⌥H (focusLeft's key) for remove displaces focusLeft, and the
-    // K alias keeps working, so only one action is listed.
+func testHotkeyConflictExactComboIsRefused() throws {
+    // ⌘⌥H is focusLeft's exact combo: claiming it for remove is refused.
     let conflict = HotkeyConflicts.check(action: "remove", keyCode: 4,
                                          flags: ["cmd", "opt"],
                                          against: HotkeyBindings.defaults)
+    try assertEqual(conflict.refusedBy?.action, "focusLeft")
+    try assertEqual(conflict.refusedBy?.display, "⌘⌥H")
     try assertEqual(conflict.displacedActions, ["focusLeft"])
-    try assertEqual(conflict.systemShortcut, nil)
     try assert(!conflict.isEmpty)
     // Self-rebinding the same action is not a conflict.
     let selfBind = HotkeyConflicts.check(action: "focusLeft", keyCode: 4,
                                          flags: ["cmd", "opt"],
                                          against: HotkeyBindings.defaults)
     try assert(selfBind.isEmpty, "rebinding an action to its own combo must not conflict")
+    try assertEqual(selfBind.refusedBy, nil)
 }
 
 func testHotkeyConflictCountsSameKeyDifferentModifiers() throws {
-    // merge() frees by key code alone, so ⌘⇧H silently strips ⌘⌥H from focusLeft.
+    // merge() frees by key code alone, so ⌘⇧H strips ⌘⌥H from focusLeft.
+    // Not an exact match, so it is a warning (refusedBy nil), not a refusal.
     let conflict = HotkeyConflicts.check(action: "focusUp", keyCode: 4,
                                          flags: ["cmd", "shift"],
                                          against: HotkeyBindings.defaults)
     try assertEqual(conflict.displacedActions, ["focusLeft"])
+    try assertEqual(conflict.refusedBy, nil)
     try assertEqual(conflict.systemShortcut, nil)
+    try assert(!conflict.isEmpty)
 }
 
 func testHotkeyConflictFlagsSystemShortcut() throws {
@@ -1921,7 +1925,7 @@ let tests: [(String, () throws -> Void)] = [
     ("Hotkey display uses canonical modifier order", testHotkeyDisplayUsesCanonicalModifierOrder),
     ("Hotkey canonical actions cover defaults", testHotkeyCanonicalActionsCoverDefaults),
     ("Hotkey conflict: none for free combo", testHotkeyConflictNoneForFreeCombo),
-    ("Hotkey conflict: reports displaced action", testHotkeyConflictReportsDisplacedAction),
+    ("Hotkey conflict: exact combo is refused", testHotkeyConflictExactComboIsRefused),
     ("Hotkey conflict: same key, other modifiers displaces", testHotkeyConflictCountsSameKeyDifferentModifiers),
     ("Hotkey conflict: flags system shortcut", testHotkeyConflictFlagsSystemShortcut),
     ("Hotkey conflict: system and displaced together", testHotkeyConflictReportsSystemAndDisplacedTogether),
