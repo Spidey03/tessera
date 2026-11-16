@@ -29,12 +29,6 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           git archive --format=tar.gz -o "dist/tessera-${VERSION}.tar.gz" "v${VERSION}"
 
-      - name: Write source archive pinned by the formula
-        run: |
-          VERSION="$(tr -d '[:space:]' < VERSION)"
-          mkdir -p dist
-          git archive --format=tar.gz -o "dist/tessera-$VERSION.tar.gz" HEAD
-
       - name: Upload artifacts to GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
