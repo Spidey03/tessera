@@ -13,6 +13,35 @@ public struct WindowMapper {
         }
     }
 
+    // MARK: - Split state identity
+
+    /// Re-key captured split states from this pass's `MacWindow.id`s onto stable
+    /// identities.
+    ///
+    /// `id` is the `AXUIElement` pointer, rebuilt on every discovery pass, so
+    /// split states keyed on it match nothing on the next tile. `identity` picks
+    /// the window identity: `splitIdentity` (window number) for live re-tiles, or
+    /// `stableID` for anything written to `state.json`.
+    ///
+    /// Entries naming an unknown or ambiguous window are dropped; the node then
+    /// falls back to its default ratio rather than attaching a weight to the wrong
+    /// node.
+    public func stabilizeSplitStates(_ states: [String: SplitState],
+                                     identity: (MacWindow) -> String = { $0.splitIdentity }) -> [String: SplitState] {
+        let table = SplitStateMapper.unambiguousMap(mapping.map { (from: $0.key, to: identity($0.value)) })
+        return SplitStateMapper.rekey(states) { table[$0] }
+    }
+
+    /// Inverse of `stabilizeSplitStates`: re-key stable identities back onto this
+    /// pass's ids, so a state captured before a re-tile can be applied to the tree
+    /// built from freshly discovered windows. `identity` must match the one used
+    /// when the states were stabilized.
+    public func resolveSplitStates(_ states: [String: SplitState],
+                                   identity: (MacWindow) -> String = { $0.splitIdentity }) -> [String: SplitState] {
+        let table = SplitStateMapper.unambiguousMap(mapping.map { (from: identity($0.value), to: $0.key) })
+        return SplitStateMapper.rekey(states) { table[$0] }
+    }
+
     public func focusWindow(id: String) -> Bool {
         guard let macWin = mapping[id] else { return false }
         let appElement = AXUIElementCreateApplication(macWin.appPID)

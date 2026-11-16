@@ -2,6 +2,10 @@ import AppKit
 import ApplicationServices
 import Foundation
 
+/// Private but long-stable HIServices symbol: maps an AX window element to its CGWindowID.
+@_silgen_name("_AXUIElementGetWindow")
+private func _AXUIElementGetWindow(_ element: AXUIElement, _ windowID: UnsafeMutablePointer<CGWindowID>) -> AXError
+
 public struct WindowDiscovery {
 
     public static func allWindows() -> [MacWindow] {
@@ -56,13 +60,20 @@ public struct WindowDiscovery {
                 size: size,
                 isFocused: isFocused,
                 isGloballyFocused: isGloballyFocused,
-                isMinimized: minimized
+                isMinimized: minimized,
+                windowNumber: windowNumber(of: win)
             )
         }
         .filter { !$0.isMinimized }
     }
 
     // MARK: - AX attribute helpers
+
+    private static func windowNumber(of element: AXUIElement) -> CGWindowID? {
+        var number: CGWindowID = 0
+        guard _AXUIElementGetWindow(element, &number) == .success, number != 0 else { return nil }
+        return number
+    }
 
     private static func getAttr<T>(element: AXUIElement, key: String) -> T? {
         var value: CFTypeRef?

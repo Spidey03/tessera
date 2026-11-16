@@ -134,6 +134,202 @@ func testRemoveWindowReflowsCollapsedSubtree() throws {
     }
 }
 
+// MARK: - Split state identity
+//
+// `captureSplitState` keys each node on its two outermost leaf window ids. The
+// daemon remaps those to stable identities before they cross a tile boundary,
+// so these cover the key format and its ability to survive ids changing.
+
+func testRekeyDropsStatesNamingUnknownWindows() throws {
+    // A state naming a window this pass cannot resolve must be dropped, not kept
+    // under its old key: keeping it risks attaching a ratio captured for one pair
+    // of windows to whatever node later reuses that key. The node then falls back
+    // to its default 50/50.
+    let states = [
+        SplitStateKey.make(left: "0xA", right: "0xB"): SplitState(ratio: 0.7, orientation: .vertical),
+        SplitStateKey.make(left: "0xGONE", right: "0xB"): SplitState(ratio: 0.3, orientation: .vertical),
+        SplitStateKey.make(left: "0xA", right: "0xALSO_GONE"): SplitState(ratio: 0.9, orientation: .vertical),
+    ]
+    let out = SplitStateMapper.rekey(states, from: ["0xA", "0xB"], to: ["kitty|a", "kitty|b"])
+    try assertEqual(out.count, 1)
+    try assertEqual(out[SplitStateKey.make(left: "kitty|a", right: "kitty|b")]?.ratio, 0.7)
+}
+
+func testRekeyWithMismatchedCountsYieldsNothing() throws {
+    // A partial mapping would silently mis-pair windows, so refuse outright.
+    let states = [SplitStateKey.make(left: "0xA", right: "0xB"): SplitState(ratio: 0.7, orientation: .vertical)]
+    try assertEqual(SplitStateMapper.rekey(states, from: ["0xA"], to: ["kitty|a", "kitty|b"]).count, 0)
+    try assertEqual(SplitStateMapper.rekey(states, from: [], to: []).count, 0)
+}
+
+func testSplitStateKeyRoundTrips() throws {
+    let key = SplitStateKey.make(left: "kitty|docs", right: "Safari|Apple")
+    try assertEqual(SplitStateKey.parse(key)?.left, "kitty|docs")
+    try assertEqual(SplitStateKey.parse(key)?.right, "Safari|Apple")
+}
+
+func testSplitStateKeySurvivesPipesInNames() throws {
+    // App names and titles can contain the obvious separator, which is exactly
+    // why the composite key needs one of its own.
+    let key = SplitStateKey.make(left: "a|b|c", right: "d|e")
+    let parts = SplitStateKey.parse(key)
+    try assertEqual(parts?.left, "a|b|c")
+    try assertEqual(parts?.right, "d|e")
+}
+
+func testSplitStateKeyRejectsForeignKeys() throws {
+    // Legacy state.json keys were joined with "|". They must not parse into a
+    // bogus pair — dropping them degrades to 50/50, which is the safe default.
+    try assert(SplitStateKey.parse("0x0000007a5f2240f0|0x0000007a5f224270") == nil)
+    try assert(SplitStateKey.parse("") == nil)
+    try assert(SplitStateKey.parse("lonely") == nil)
+}
+
+/// Builds a `MacWindow` with only the fields identity depends on.
+private func identityWindow(title: String, windowNumber: CGWindowID?) -> MacWindow {
+    MacWindow(
+        windowRef: AXUIElementCreateApplication(getpid()),
+        appPID: getpid(),
+        appName: "kitty",
+        bundleID: nil,
+        title: title,
+        role: nil,
+        subrole: nil,
+        position: .zero,
+        size: .zero,
+        isFocused: false,
+        isGloballyFocused: false,
+        isMinimized: false,
+        windowNumber: windowNumber
+    )
+}
+
+func testSplitIdentityIgnoresTitle() throws {
+    // Terminal and browser titles change between passes. Same window number, new
+    // title must still produce the same split identity.
+    let before = identityWindow(title: "~/Projects/tessera", windowNumber: 101)
+    let after = identityWindow(title: "OC | Tessera BSP", windowNumber: 101)
+    try assertEqual(before.splitIdentity, after.splitIdentity)
+}
+
+func testSplitIdentityKeepsSameTitledWindowsApart() throws {
+    // Two "OC" windows in one app used to share the key "kitty|OC".
+    let a = identityWindow(title: "OC", windowNumber: 101)
+    let b = identityWindow(title: "OC", windowNumber: 102)
+    try assert(a.splitIdentity != b.splitIdentity, "same-titled windows must not share an identity")
+}
+
+func testAmbiguousFallbackIdentitiesAreDropped() throws {
+    // Without a window number the fallback is the title. Two windows sharing it
+    // must be left out of the map, so their split states are dropped rather than
+    // applied to whichever window was scanned first.
+    let x = identityWindow(title: "OC", windowNumber: nil)
+    let y = identityWindow(title: "OC", windowNumber: nil)
+    let table = SplitStateMapper.unambiguousMap([(from: "0xX", to: x.splitIdentity), (from: "0xY", to: y.splitIdentity)])
+    try assertEqual(table.count, 0)
+
+    let states = [SplitStateKey.make(left: "0xX", right: "0xY"): SplitState(ratio: 0.7, orientation: .vertical)]
+    try assertEqual(SplitStateMapper.rekey(states) { table[$0] }.count, 0)
+}
+
+func testUnambiguousMapKeepsUniqueIdentities() throws {
+    let table = SplitStateMapper.unambiguousMap([(from: "0xA", to: "win:101"),
+                                                 (from: "0xB", to: "win:102"),
+                                                 (from: "0xC", to: "win:102")])
+    try assertEqual(table["0xA"], "win:101")
+    try assertEqual(table["0xB"], nil)
+    try assertEqual(table["0xC"], nil)
+}
+
+func testSplitStateSurvivesTitleChangeAcrossPasses() throws {
+    // Pass 1: windows 101/102 with pointer ids 0xAAA/0xBBB and titles "a"/"b".
+    let monitor = Rect(x: 0, y: 0, width: 1920, height: 1080)
+    let first = Workspace(monitorRect: monitor)
+    first.applyPreset(.bsp, orderedIDs: ["0xAAA", "0xBBB"])
+    first.focusWindow(id: "0xAAA")
+    first.resizeSplit(delta: 0.2)
+    let toIdentity = SplitStateMapper.unambiguousMap([(from: "0xAAA", to: "win:101"),
+                                                      (from: "0xBBB", to: "win:102")])
+    let carried = SplitStateMapper.rekey(first.captureSplitState()) { toIdentity[$0] }
+    try assertEqual(carried.count, 1)
+
+    // Pass 2: same window numbers, new pointers, and titles that have changed.
+    // The identity table is built from window numbers, so titles play no part.
+    let second = Workspace(monitorRect: monitor)
+    second.applyPreset(.bsp, orderedIDs: ["0xZZZ", "0xYYY"])
+    let toPointer = SplitStateMapper.unambiguousMap([(from: "win:101", to: "0xZZZ"),
+                                                     (from: "win:102", to: "0xYYY")])
+    second.applySplitState(SplitStateMapper.rekey(carried) { toPointer[$0] })
+    try assertEqual(Int(second.getLayout().first { $0.0.id == "0xZZZ" }!.1.width.rounded()), 1330)
+}
+
+func testCapturedSplitStateSurvivesAFreshDiscoveryPass() throws {
+    // The regression: real ids are AXUIElement pointers that change on every
+    // discovery pass, so a state captured from one pass never matches the next.
+    // Re-keying by stable identity is what keeps a resizeSplit alive.
+    let first = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    first.applyPreset(.bsp, orderedIDs: ["0xAAA", "0xBBB"])
+    first.focusWindow(id: "0xAAA")
+    first.resizeSplit(delta: 0.2)
+    let captured = first.captureSplitState()
+    try assertEqual(captured.count, 1)
+    try assertEqual(Array(captured.values)[0].ratio, 0.7)
+
+    // Same windows, brand new ids — as a re-discovery would produce.
+    let second = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
+    second.applyPreset(.bsp, orderedIDs: ["0xZZZ", "0xYYY"])
+
+    // Raw ids do not line up, which is the bug.
+    let raw = second.captureSplitState()
+    try assert(Set(raw.keys).isDisjoint(with: Set(captured.keys)),
+               "expected volatile ids not to collide across passes")
+
+    // Re-keying both sides by stable identity is what makes them line up.
+    let rekeyedOld = rekeySplitStates(captured, from: ["0xAAA", "0xBBB"], to: ["kitty|a", "kitty|b"])
+    let rekeyedNew = rekeySplitStates(raw, from: ["0xZZZ", "0xYYY"], to: ["kitty|a", "kitty|b"])
+    try assertEqual(Set(rekeyedOld.keys), Set(rekeyedNew.keys))
+    try assertEqual(rekeyedOld[SplitStateKey.make(left: "kitty|a", right: "kitty|b")]?.ratio, 0.7)
+}
+
+func testResizeRatioSurvivesApplyThroughStableKeys() throws {
+    // End to end through the real code path: capture under old ids, re-key to
+    // stable identities, rebuild the tree with fresh ids, re-key back, apply.
+    let monitor = Rect(x: 0, y: 0, width: 1920, height: 1080)
+    let first = Workspace(monitorRect: monitor)
+    first.applyPreset(.bsp, orderedIDs: ["0xAAA", "0xBBB"])
+    first.focusWindow(id: "0xAAA")
+    first.resizeSplit(delta: 0.2)
+    let carried = rekeySplitStates(first.captureSplitState(),
+                                   from: ["0xAAA", "0xBBB"],
+                                   to: ["kitty|a", "kitty|b"])
+    try assertEqual(carried.count, 1)
+
+    // A re-tile rediscovers the same two windows under new ids.
+    let second = Workspace(monitorRect: monitor)
+    second.applyPreset(.bsp, orderedIDs: ["0xZZZ", "0xYYY"])
+
+    // Applied without translating back, the stable keys name nothing in this
+    // tree and the resize is silently dropped.
+    second.applySplitState(carried)
+    try assertEqual(Int(second.getLayout().first { $0.0.id == "0xZZZ" }!.1.width.rounded()), 948)
+
+    // The daemon's actual step: re-key the stable identities onto this pass's ids.
+    second.applySplitState(rekeySplitStates(carried,
+                                            from: ["kitty|a", "kitty|b"],
+                                            to: ["0xZZZ", "0xYYY"]))
+    try assertEqual(Int(second.getLayout().first { $0.0.id == "0xZZZ" }!.1.width.rounded()), 1330)
+}
+
+// Stand-in for the mapper-side re-keying the daemon performs, expressed against
+// plain id lists so the identity logic is testable without live AX.
+private func rekeySplitStates(
+    _ states: [String: SplitState],
+    from oldIDs: [String],
+    to stable: [String]
+) -> [String: SplitState] {
+    return SplitStateMapper.rekey(states, from: oldIDs, to: stable)
+}
+
 func testFocusStaysOnExistingWindow() throws {
     let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080),
                        config: TesseraConfig(newWindowFocus: false))
@@ -1148,8 +1344,8 @@ func testCaptureApplyRatiosRoundTripPreservesGeometry() throws {
     try assertEqual(Int(before.width.rounded()), 1330) // 1912*0.7 - 8
 
     let captured = ws.captureSplitState()
-    try assertEqual(captured["A|B"]?.ratio, 0.7)
-    try assertEqual(captured["A|B"]?.orientation, .vertical)
+    try assertEqual(captured[SplitStateKey.make(left: "A", right: "B")]?.ratio, 0.7)
+    try assertEqual(captured[SplitStateKey.make(left: "A", right: "B")]?.orientation, .vertical)
 
     // Simulate the daemon re-tile: full tree rebuild + ratio restore.
     let rebuilt = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
@@ -1168,7 +1364,7 @@ func testApplySplitStateKeepsSurvivingSplitsAcrossAdds() throws {
     before.focusWindow(id: "A")
     before.resizeSplit(delta: 0.2)
     let persisted = before.captureSplitState()
-    try assertEqual(persisted["A|B"]?.ratio, 0.7)
+    try assertEqual(persisted[SplitStateKey.make(left: "A", right: "B")]?.ratio, 0.7)
 
     // 2. C window arrives → daemon re-tiles [A,B,C] with the persisted state.
     //    The rebuild re-shapes (A is now narrower, so it splits horizontally),
@@ -1181,7 +1377,7 @@ func testApplySplitStateKeepsSurvivingSplitsAcrossAdds() throws {
 
     // 3. Daemon persists the retiled state; a restart must reproduce it exactly.
     let retiledState = retiled.captureSplitState()
-    try assertEqual(retiledState["A|B"]?.ratio, 0.7)
+    try assertEqual(retiledState[SplitStateKey.make(left: "A", right: "B")]?.ratio, 0.7)
     let restart = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
     restart.applyPreset(.bsp, orderedIDs: ["A", "B", "C"])
     restart.applySplitState(retiledState)
@@ -1192,8 +1388,8 @@ func testApplySplitStateKeepsSurvivingSplitsAcrossAdds() throws {
 func testApplySplitStateIgnoresUnknownKeys() throws {
     let ws = Workspace(monitorRect: Rect(x: 0, y: 0, width: 1920, height: 1080))
     ws.applyPreset(.bsp, orderedIDs: ["A", "B"])
-    ws.applySplitState(["X|Y": SplitState(ratio: 0.9, orientation: .vertical),
-                                 "A|B": SplitState(ratio: 0.65, orientation: .vertical)])
+    ws.applySplitState([SplitStateKey.make(left: "X", right: "Y"): SplitState(ratio: 0.9, orientation: .vertical),
+                        SplitStateKey.make(left: "A", right: "B"): SplitState(ratio: 0.65, orientation: .vertical)])
     // Matching key applies, unmatched keys are ignored.
     let a = ws.getLayout().first { $0.0.id == "A" }!.1
     try assertEqual(Int(a.width.rounded()), 1235) // 1912*0.65 - 8 = 1234.8 → 1235
@@ -1533,6 +1729,18 @@ let tests: [(String, () throws -> Void)] = [
     ("Focus stays on existing window", testFocusStaysOnExistingWindow),
     ("Remove gives survivor the whole area", testRemoveWindowGivesSurvivorTheWholeArea),
     ("Remove reflows collapsed subtree", testRemoveWindowReflowsCollapsedSubtree),
+    ("Rekey drops states naming unknown windows", testRekeyDropsStatesNamingUnknownWindows),
+    ("Rekey with mismatched counts yields nothing", testRekeyWithMismatchedCountsYieldsNothing),
+    ("Split state key round-trips", testSplitStateKeyRoundTrips),
+    ("Split state key survives pipes in names", testSplitStateKeySurvivesPipesInNames),
+    ("Split state key rejects foreign keys", testSplitStateKeyRejectsForeignKeys),
+    ("Captured split state survives a fresh pass", testCapturedSplitStateSurvivesAFreshDiscoveryPass),
+    ("Split identity ignores title", testSplitIdentityIgnoresTitle),
+    ("Split identity keeps same-titled windows apart", testSplitIdentityKeepsSameTitledWindowsApart),
+    ("Ambiguous fallback identities are dropped", testAmbiguousFallbackIdentitiesAreDropped),
+    ("Unambiguous map keeps unique identities", testUnambiguousMapKeepsUniqueIdentities),
+    ("Split state survives title change across passes", testSplitStateSurvivesTitleChangeAcrossPasses),
+    ("Resize ratio survives apply via stable keys", testResizeRatioSurvivesApplyThroughStableKeys),
     ("New window can get focus", testNewWindowCanGetFocus),
     ("Remove window collapses tree", testRemoveWindowCollapsesTree),
     ("Remove focused window collapses and refocuses", testRemoveFocusedWindowCollapsesAndRefocuses),
