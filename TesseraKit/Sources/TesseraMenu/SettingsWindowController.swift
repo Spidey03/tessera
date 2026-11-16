@@ -26,8 +26,12 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         let action: String
         let comboButton: NSButton
         let resetButton: NSButton
+        let warningLabel: NSTextField
     }
     private var hotkeyRows: [HotkeyRow] = []
+    /// Informational conflict notes for rows whose combo was just claimed.
+    /// Cleared on Reset and on any full rebuild (Save / reload).
+    private var hotkeyWarnings: [String: String] = [:]
     private var hotkeyMonitor: Any?
     private var recordingAction: String?
 
@@ -333,6 +337,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         }
         hotkeyRows = []
         cancelHotkeyRecording()
+        hotkeyWarnings = [:]
         for action in HotkeyBindings.canonicalActions {
             let title = NSTextField(labelWithString: hotkeyTitles[action] ?? action)
             title.font = NSFont.systemFont(ofSize: 12)
@@ -351,20 +356,41 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             resetButton.widthAnchor.constraint(equalToConstant: 52).isActive = true
             resetButton.isHidden = settings.hotkeys[action] == nil
 
-            let row = NSStackView(views: [title, comboButton, resetButton])
-            row.orientation = .horizontal
-            row.spacing = 8
-            row.alignment = .centerY
+            let controls = NSStackView(views: [title, comboButton, resetButton])
+            controls.orientation = .horizontal
+            controls.spacing = 8
+            controls.alignment = .centerY
+            controls.translatesAutoresizingMaskIntoConstraints = false
+            controls.heightAnchor.constraint(equalToConstant: 20).isActive = true
+
+            // Second line under the row; collapsed (hidden) unless a claim
+            // displaced another action or collided with a macOS shortcut.
+            let warningLabel = NSTextField(labelWithString: "")
+            warningLabel.font = NSFont.systemFont(ofSize: 11)
+            warningLabel.textColor = .systemOrange
+            warningLabel.lineBreakMode = .byTruncatingTail
+            warningLabel.isHidden = true
+
+            let row = NSStackView(views: [controls, warningLabel])
+            row.orientation = .vertical
+            row.spacing = 2
+            row.alignment = .leading
             row.translatesAutoresizingMaskIntoConstraints = false
-            row.heightAnchor.constraint(equalToConstant: 20).isActive = true
             hotkeyStack.addArrangedSubview(row)
-            hotkeyRows.append(HotkeyRow(action: action, comboButton: comboButton, resetButton: resetButton))
+            let hotkeyRow = HotkeyRow(action: action, comboButton: comboButton,
+                                      resetButton: resetButton, warningLabel: warningLabel)
+            hotkeyRows.append(hotkeyRow)
+            refreshHotkeyRow(hotkeyRow)
         }
     }
 
     private func refreshHotkeyRow(_ row: HotkeyRow) {
         row.comboButton.title = effectiveCombo(for: row.action)
         row.resetButton.isHidden = settings.hotkeys[row.action] == nil
+        let warning = hotkeyWarnings[row.action] ?? ""
+        row.warningLabel.stringValue = warning
+        row.warningLabel.toolTip = warning
+        row.warningLabel.isHidden = warning.isEmpty
     }
 
     @objc private func recordHotkey(_ sender: NSButton) {
@@ -394,23 +420,38 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         }
         let spec = HotkeySpec(keyCode: UInt16(event.keyCode), flags: names)
 
-        let conflict = mergedHotkeys().first { binding in
-            binding.action != action
-                && binding.keyCode == spec.keyCode
-                && BindingFlagsEqual(binding.flags, HotkeyBindings.normalizedFlags(names))
-        }
-        if let conflict {
-            statusLabel.stringValue = "\(conflict.action) already uses \(conflict.display)."
+        let conflict = HotkeyConflicts.check(action: action, keyCode: spec.keyCode,
+                                             flags: names, against: mergedHotkeys())
+        // Exact combo already bound to another action: refuse, as before.
+        if let existing = conflict.refusedBy {
+            // Cancel first: cancelHotkeyRecording() clears the status line.
             cancelHotkeyRecording()
+            statusLabel.stringValue = "\(existing.action) already uses \(existing.display)."
             return
         }
-
+        // Same key with other modifiers and system shortcuts: warn, but apply.
+        // On Save the merge frees any displaced key exactly as before.
         settings.hotkeys[action] = spec
+        hotkeyWarnings[action] = conflictWarning(for: conflict)
         cancelHotkeyRecording()
-        if let row = hotkeyRows.first(where: { $0.action == action }) {
+        // Refresh every row: a displaced action's combo has changed too.
+        for row in hotkeyRows {
             refreshHotkeyRow(row)
         }
-        statusLabel.stringValue = ""
+    }
+
+    private func conflictWarning(for conflict: HotkeyConflict) -> String {
+        var parts: [String] = []
+        if !conflict.displacedActions.isEmpty {
+            let names = conflict.displacedActions
+                .map { hotkeyTitles[$0] ?? $0 }
+                .joined(separator: ", ")
+            parts.append("Displaces \(names) on Save.")
+        }
+        if let system = conflict.systemShortcut {
+            parts.append("Overrides macOS shortcut \(system).")
+        }
+        return parts.joined(separator: " ")
     }
 
     private func flagNames(from flags: NSEvent.ModifierFlags) -> [String] {
@@ -424,13 +465,10 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         return names
     }
 
-    private func BindingFlagsEqual(_ a: [String], _ b: [String]) -> Bool {
-        Set(a) == Set(b)
-    }
-
     @objc private func resetHotkey(_ sender: NSButton) {
         guard let row = hotkeyRows.first(where: { $0.resetButton === sender }) else { return }
         settings.hotkeys[row.action] = nil
+        hotkeyWarnings[row.action] = nil
         refreshHotkeyRow(row)
     }
 
