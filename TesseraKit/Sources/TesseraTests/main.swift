@@ -1805,22 +1805,22 @@ func testAutoFloatFloatsAboveThreshold() throws {
 }
 
 func testAutoFloatThresholdConfigParsing() throws {
-    try assertEqual(AutoFloat.overflowThreshold(from: nil), 50)
+    try assertEqual(AutoFloat.overflowThreshold(from: nil), 5)
     try assertEqual(AutoFloat.overflowThreshold(from: 120), 120)
     try assertEqual(AutoFloat.overflowThreshold(from: 0), 0)
     try assertEqual(AutoFloat.overflowThreshold(from: 500), 500)
-    // Out-of-range, non-finite values fall back to the default of 50.
-    try assertEqual(AutoFloat.overflowThreshold(from: -1), 50)
-    try assertEqual(AutoFloat.overflowThreshold(from: 501), 50)
-    try assertEqual(AutoFloat.overflowThreshold(from: .nan), 50)
-    try assertEqual(AutoFloat.overflowThreshold(from: .infinity), 50)
-    try assertEqual(TesseraConfig().autoFloatOverflowThreshold, 50)
+    // Out-of-range, non-finite values fall back to the default of 5.
+    try assertEqual(AutoFloat.overflowThreshold(from: -1), 5)
+    try assertEqual(AutoFloat.overflowThreshold(from: 501), 5)
+    try assertEqual(AutoFloat.overflowThreshold(from: .nan), 5)
+    try assertEqual(AutoFloat.overflowThreshold(from: .infinity), 5)
+    try assertEqual(TesseraConfig().autoFloatOverflowThreshold, 5)
 }
 
 let tests: [(String, () throws -> Void)] = [
     ("Auto-float stays tiled at or below the threshold", testAutoFloatStaysTiledAtOrBelowThreshold),
     ("Auto-float floats windows above the threshold", testAutoFloatFloatsAboveThreshold),
-    ("Auto-float threshold parses and falls back to 50 when out of range", testAutoFloatThresholdConfigParsing),
+    ("Auto-float threshold parses and falls back to 5 when out of range", testAutoFloatThresholdConfigParsing),
     ("Every animation curve starts at 0 and lands on 1", testEveryCurveStartsAtZeroAndLandsOnOne),
     ("Every animation curve is monotonic (never overshoots)", testEveryCurveIsMonotonic),
     ("Animation curves clamp out-of-range progress", testCurveClampsOutOfRangeProgress),

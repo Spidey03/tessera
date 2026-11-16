@@ -3,7 +3,7 @@ import Foundation
 /// Decides when a tiled window that extends past the screen is auto-floated.
 public enum AutoFloat {
     /// Overflow allowed before a window floats when the config omits the key.
-    public static let defaultOverflowThreshold: Double = 50
+    public static let defaultOverflowThreshold: Double = 5
     /// Accepted range for `autoFloatOverflowThreshold` (pixels).
     public static let overflowThresholdRange: ClosedRange<Double> = 0...500
 
