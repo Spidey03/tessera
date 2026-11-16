@@ -1,7 +1,8 @@
 import Foundation
 import TesseraKit
 
-/// Release version, kept in sync with the Homebrew formula tag (v0.4.0).
+/// Release version. Must match the root `VERSION` file; `scripts/check_version.sh`
+/// fails CI if it drifts. Swift cannot read VERSION at compile time, so this is a checked copy.
 let version = "0.4.0"
 
 setbuf(stdout, nil)
