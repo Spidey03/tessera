@@ -1487,6 +1487,69 @@ func testHotkeyCanonicalActionsCoverDefaults() throws {
     try assertEqual(HotkeyBindings.canonicalActions.count, 14)
 }
 
+func testHotkeyConflictNoneForFreeCombo() throws {
+    // ⌘⌥⇧7 (keyCode 26) is unused by defaults and not a system shortcut.
+    let conflict = HotkeyConflicts.check(action: "tile", keyCode: 26,
+                                         flags: ["cmd", "opt", "shift"],
+                                         against: HotkeyBindings.defaults)
+    try assert(conflict.isEmpty, "expected no conflict, got \(conflict)")
+    try assertEqual(conflict.displacedActions, [])
+    try assertEqual(conflict.systemShortcut, nil)
+}
+
+func testHotkeyConflictReportsDisplacedAction() throws {
+    // Claiming ⌘⌥H (focusLeft's key) for remove displaces focusLeft, and the
+    // K alias keeps working, so only one action is listed.
+    let conflict = HotkeyConflicts.check(action: "remove", keyCode: 4,
+                                         flags: ["cmd", "opt"],
+                                         against: HotkeyBindings.defaults)
+    try assertEqual(conflict.displacedActions, ["focusLeft"])
+    try assertEqual(conflict.systemShortcut, nil)
+    try assert(!conflict.isEmpty)
+    // Self-rebinding the same action is not a conflict.
+    let selfBind = HotkeyConflicts.check(action: "focusLeft", keyCode: 4,
+                                         flags: ["cmd", "opt"],
+                                         against: HotkeyBindings.defaults)
+    try assert(selfBind.isEmpty, "rebinding an action to its own combo must not conflict")
+}
+
+func testHotkeyConflictCountsSameKeyDifferentModifiers() throws {
+    // merge() frees by key code alone, so ⌘⇧H silently strips ⌘⌥H from focusLeft.
+    let conflict = HotkeyConflicts.check(action: "focusUp", keyCode: 4,
+                                         flags: ["cmd", "shift"],
+                                         against: HotkeyBindings.defaults)
+    try assertEqual(conflict.displacedActions, ["focusLeft"])
+    try assertEqual(conflict.systemShortcut, nil)
+}
+
+func testHotkeyConflictFlagsSystemShortcut() throws {
+    // ⌘Space is Spotlight; no default binding uses it.
+    let space = HotkeyConflicts.check(action: "tile", keyCode: 49, flags: ["command"],
+                                      against: HotkeyBindings.defaults)
+    try assertEqual(space.systemShortcut, "⌘Space")
+    try assertEqual(space.displacedActions, [])
+    // ⌘⇧4 matches exactly; ⌘⌥⇧4 (extra modifier) does not.
+    let shot = HotkeyConflicts.check(action: "tile", keyCode: 21, flags: ["cmd", "shift"],
+                                     against: HotkeyBindings.defaults)
+    try assertEqual(shot.systemShortcut, "⌘⇧4")
+    let notSystem = HotkeyConflicts.check(action: "tile", keyCode: 21, flags: ["cmd", "opt", "shift"],
+                                          against: HotkeyBindings.defaults)
+    try assertEqual(notSystem.systemShortcut, nil)
+}
+
+func testHotkeyConflictReportsSystemAndDisplacedTogether() throws {
+    // ⌘Q is both a system shortcut and quit's key (keyCode 12) under another
+    // modifier set, so both signals appear. Re-claiming quit's own combo is not
+    // a conflict.
+    let cmdQ = HotkeyConflicts.check(action: "tile", keyCode: 12, flags: ["cmd"],
+                                     against: HotkeyBindings.defaults)
+    try assertEqual(cmdQ.systemShortcut, "⌘Q")
+    try assertEqual(cmdQ.displacedActions, ["quit"])
+    let ownQuit = HotkeyConflicts.check(action: "quit", keyCode: 12, flags: ["cmd", "opt", "shift"],
+                                        against: HotkeyBindings.defaults)
+    try assert(ownQuit.isEmpty)
+}
+
 // MARK: - Update model (ReleaseVersion / UpdateAppcast)
 
 func testVersionCompareAcceptsAlphanumericComponents() throws {
@@ -1857,6 +1920,11 @@ let tests: [(String, () throws -> Void)] = [
     ("Hotkey key symbols", testHotkeyKeySymbols),
     ("Hotkey display uses canonical modifier order", testHotkeyDisplayUsesCanonicalModifierOrder),
     ("Hotkey canonical actions cover defaults", testHotkeyCanonicalActionsCoverDefaults),
+    ("Hotkey conflict: none for free combo", testHotkeyConflictNoneForFreeCombo),
+    ("Hotkey conflict: reports displaced action", testHotkeyConflictReportsDisplacedAction),
+    ("Hotkey conflict: same key, other modifiers displaces", testHotkeyConflictCountsSameKeyDifferentModifiers),
+    ("Hotkey conflict: flags system shortcut", testHotkeyConflictFlagsSystemShortcut),
+    ("Hotkey conflict: system and displaced together", testHotkeyConflictReportsSystemAndDisplacedTogether),
     // Update model
     ("Version compare accepts alphanumeric components", testVersionCompareAcceptsAlphanumericComponents),
     ("Version compare handles shorter forms", testVersionCompareShorterForms),
