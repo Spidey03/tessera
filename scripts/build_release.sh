@@ -17,8 +17,8 @@
 # Env:
 #   TESSERA_SIGN_IDENTITY   codesign identity; default: first "Developer ID
 #                           Application" found in the keychain, else ad-hoc.
-#   TESSERA_NOTARY_*        notarytool API-key credentials (key id, key PEM,
-#                           issuer id). Alternatively TESSERA_APPLE_ID +
+#   TESSERA_NOTARY_*        notarytool API-key credentials (key id, path
+#                           to the .p8 key file, issuer id). Alternatively TESSERA_APPLE_ID +
 #                           TESSERA_APPLE_PASSWORD + TESSERA_TEAM_ID.
 #   TESSERA_DEST            staging dir for the build (default: mktemp)
 #   TESSERA_OUT_DIR         output dir for artifacts (default: ./dist)
@@ -44,7 +44,7 @@ APP="$STAGE"
 # --- 2. Sign --------------------------------------------------------------
 SIGN_IDENTITY="${TESSERA_SIGN_IDENTITY:-}"
 if [ -z "$SIGN_IDENTITY" ]; then
-    SIGN_IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | rg -m1 "Developer ID Application" | sed 's/.*"\(.*\)".*/\1/' || true)"
+    SIGN_IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | grep -m1 "Developer ID Application" | sed 's/.*"\(.*\)".*/\1/' || true)"
 fi
 
 if [ -n "$SIGN_IDENTITY" ]; then
@@ -52,7 +52,7 @@ if [ -n "$SIGN_IDENTITY" ]; then
     codesign --force --deep --options runtime --timestamp \
              --sign "$SIGN_IDENTITY" "$APP"
     codesign --verify --deep --strict --verbose=2 "$APP" >/dev/null
-    echo "   signature verified ✓  (authority: $(codesign -dv "$APP" 2>&1 | rg 'Authority=Developer ID' | head -1))"
+    echo "   signature verified ✓  (authority: $(codesign -dvv "$APP" 2>&1 | grep -m1 'Authority=Developer ID' || true))"
     SIGNED=true
 else
     echo "==> Signing ad-hoc (NO Developer ID identity found)"
@@ -67,6 +67,8 @@ NOTARIZED=false
 if [ "$SIGNED" = true ]; then
     NOTARY_ARGS=()
     if [ -n "${TESSERA_NOTARY_KEY_ID:-}" ] && [ -n "${TESSERA_NOTARY_KEY:-}" ] && [ -n "${TESSERA_NOTARY_ISSUER:-}" ]; then
+        # notarytool takes a path to the .p8, not its contents.
+        [ -r "$TESSERA_NOTARY_KEY" ] || { echo "error: TESSERA_NOTARY_KEY must be the path of a readable .p8 file" >&2; exit 1; }
         NOTARY_ARGS=(--key-id "$TESSERA_NOTARY_KEY_ID" --key "$TESSERA_NOTARY_KEY" --issuer "$TESSERA_NOTARY_ISSUER")
     elif [ -n "${TESSERA_APPLE_ID:-}" ] && [ -n "${TESSERA_APPLE_PASSWORD:-}" ]; then
         NOTARY_ARGS=(--apple-id "$TESSERA_APPLE_ID" --password "$TESSERA_APPLE_PASSWORD" --team-id "${TESSERA_TEAM_ID:-}")
@@ -78,7 +80,7 @@ if [ "$SIGNED" = true ]; then
         xcrun notarytool submit "$ZIP" "${NOTARY_ARGS[@]}" --wait
         echo "==> Stapling…"
         xcrun stapler staple "$APP"
-        spctl -a -vv --type execute "$APP" 2>&1 | rg "accepted|rejected" | head -2
+        spctl -a -vv --type execute "$APP"
         NOTARIZED=true
     else
         echo "==> Notarization SKIPPED"

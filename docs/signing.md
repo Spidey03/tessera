@@ -32,6 +32,14 @@ Everything sensitive lives in `~/TesseraSigning/` (**never commit**):
 - [ ] Note the **Key ID** (10 chars) and your **Issuer ID** (UUID, shown on
       the Keys page)
 
+### GitHub secrets for CI (optional; without them releases are unsigned)
+- `TESSERA_CERT_P12`: base64 of the certificate **and private key** exported
+  from Keychain Access as `.p12` (`base64 -i cert.p12`)
+- `TESSERA_CERT_PASSWORD`: the `.p12` export password
+- `TESSERA_NOTARY_KEY`: the **contents** of the `.p8` (CI writes it to a file)
+- `TESSERA_NOTARY_KEY_ID`, `TESSERA_NOTARY_ISSUER`
+- `TESSERA_SIGN_IDENTITY`: optional, found in the keychain when unset
+
 ## Update signing key (required for every release)
 Independent of Apple signing. `appcast.json` is signed with an Ed25519 key; the
 public half is `UpdateVerifier.publicKeyBase64` in `Update.swift`.
@@ -47,7 +55,7 @@ public half is `UpdateVerifier.publicKeyBase64` in `Update.swift`.
 cd ~/Projects/tessera
 TESSERA_SIGN_IDENTITY="Developer ID Application: ..." \
 TESSERA_NOTARY_KEY_ID="..." \
-TESSERA_NOTARY_KEY="$(cat ~/TesseraSigning/AuthKey_XXXX.p8)" \
+TESSERA_NOTARY_KEY="$HOME/TesseraSigning/AuthKey_XXXX.p8" \
 TESSERA_NOTARY_ISSUER="..." \
 scripts/build_release.sh
 ```
