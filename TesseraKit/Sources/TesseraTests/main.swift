@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import CryptoKit
 import Foundation
 import TesseraKit
 import TesseraSystem
@@ -1601,6 +1602,50 @@ func testAppcastParseThrowsOnMalformedData() throws {
     }
 }
 
+func expectUpdateError(_ expected: UpdateVerificationError, _ body: () throws -> Void) throws {
+    do { try body() } catch let error as UpdateVerificationError {
+        try assertEqual(error, expected)
+        return
+    }
+    throw TestError.assertionFailed("expected \(expected)")
+}
+
+func testUpdateSignature() throws {
+    let key = Curve25519.Signing.PrivateKey()
+    let pub = key.publicKey.rawRepresentation.base64EncodedString()
+    let data = Data("{\"version\":\"0.5.0\"}".utf8)
+    let sig = Data((try key.signature(for: data).base64EncodedString() + "\n").utf8)
+    try UpdateVerifier.verifySignature(of: data, signature: sig, publicKeyBase64: pub)
+    try expectUpdateError(.invalidSignature) { // tampered content
+        try UpdateVerifier.verifySignature(of: data + Data(" ".utf8), signature: sig, publicKeyBase64: pub)
+    }
+    try expectUpdateError(.invalidSignature) { // signed by a different key
+        try UpdateVerifier.verifySignature(of: data, signature: sig)
+    }
+    try expectUpdateError(.invalidSignature) { // garbage
+        try UpdateVerifier.verifySignature(of: data, signature: Data("nope".utf8), publicKeyBase64: pub)
+    }
+}
+
+func testEmbeddedUpdateKeyIsValid() throws {
+    let raw = Data(base64Encoded: UpdateVerifier.publicKeyBase64)
+    try assert(raw != nil, "embedded key is not base64")
+    _ = try Curve25519.Signing.PublicKey(rawRepresentation: raw!)
+}
+
+func testUpdatePackageChecks() throws {
+    let data = Data("abc".utf8)
+    let sha = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    func info(_ sha: String, _ size: Int) -> UpdateReleaseInfo {
+        UpdateReleaseInfo(version: "1.0.0", tag: "v1.0.0", url: "https://example.com", sha256: sha, size: size)
+    }
+    try UpdateVerifier.verifyPackage(data, matches: info(sha, 3))
+    try expectUpdateError(.sizeMismatch) { try UpdateVerifier.verifyPackage(data, matches: info(sha, 4)) }
+    try expectUpdateError(.checksumMismatch) {
+        try UpdateVerifier.verifyPackage(Data("abd".utf8), matches: info(sha, 3))
+    }
+}
+
 // MARK: - Runner
 
 
@@ -2052,6 +2097,9 @@ let tests: [(String, () throws -> Void)] = [
     ("Appcast parse returns newer release", testAppcastParseReturnsNewer),
     ("Appcast parse nil when older or equal", testAppcastParseNilWhenOlderOrEqual),
     ("Appcast parse throws on malformed data", testAppcastParseThrowsOnMalformedData),
+    ("Update signature rejects tampering and foreign keys", testUpdateSignature),
+    ("Embedded update key is valid", testEmbeddedUpdateKeyIsValid),
+    ("Update package must match signed size and sha256", testUpdatePackageChecks),
     ("Menu bar glyph ink matches Apple metrics", testMenuBarGlyphInkMatchesAppleMetrics),
     ("Status item is not wider than the glyph it shows", testStatusItemIsNotWiderThanTheGlyphItDisplays),
     ("Menu bar glyph is a template with 1x and 2x reps", testMenuBarGlyphIsTemplateWithBothScales),

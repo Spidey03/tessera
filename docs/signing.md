@@ -32,6 +32,16 @@ Everything sensitive lives in `~/TesseraSigning/` (**never commit**):
 - [ ] Note the **Key ID** (10 chars) and your **Issuer ID** (UUID, shown on
       the Keys page)
 
+## Update signing key (required for every release)
+Independent of Apple signing. `appcast.json` is signed with an Ed25519 key; the
+public half is `UpdateVerifier.publicKeyBase64` in `Update.swift`.
+- Private key: `~/TesseraSigning/tessera_update_ed25519.key` (**never commit**;
+  back it up: if it is lost, installed apps cannot accept any further updates)
+- Do **not** add it to GitHub. CI builds a draft release; `scripts/sign_release.sh
+  <version>` then checks the build attestations against your local tag, signs
+  `appcast.json` on your machine and publishes the draft. Run it from a trusted
+  checkout, and check that the local tag is the commit you meant to release.
+
 ## 3. Local signed build
 ```bash
 cd ~/Projects/tessera

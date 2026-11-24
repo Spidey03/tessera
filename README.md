@@ -204,14 +204,14 @@ brew install --build-from-source "$PWD/dist/Tessera.rb"
 
 **Release ritual** (when cutting a new version). Run from the repo root.
 
-Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds the release artifacts, creates the GitHub release if it is missing, and uploads `dist/*` (the DMG, `-dist.zip`, `appcast.json`, and the source archive the formula pins). Do not run `gh release create` or `scripts/build_release.sh` by hand for a release.
+Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds the release artifacts, creates a **draft** GitHub release if it is missing, and uploads `dist/*` (the DMG, `-dist.zip`, `appcast.json`, and the source archive the formula pins). Do not run `gh release create` or `scripts/build_release.sh` by hand for a release.
 
 1. Set the new version in the root `VERSION` file (the single source of truth; `scripts/build_app.sh` and `scripts/build_release.sh` read it). Then update the checked copies to match: `let version` in `TesseraKit/Sources/TesseraDaemon/main.swift`, `let tesseraMenuVersion` in `TesseraKit/Sources/TesseraMenu/main.swift`, and `version`/`url` in `Formula/tessera.rb` and `Casks/tessera.rb`. Run `scripts/check_version.sh` until it passes (CI runs it too); commit and push to `main`.
 2. Tag and push. The release workflow builds the artifacts and creates the GitHub release with them:
    ```bash
    VERSION="$(tr -d '[:space:]' < VERSION)"; git tag "v$VERSION" && git push origin "v$VERSION"
    ```
-3. Wait for the Release workflow to finish (Actions tab, or `gh run watch`). Then get the sha256 of the source archive from the release. The formula pins this release asset rather than the tag tarball, because GitHub's cache serves tag-recreated tarballs stale; asset URLs are deterministic and byte-verified:
+3. Wait for the Release workflow to finish (Actions tab, or `gh run watch`). Then sign and publish the draft with `scripts/sign_release.sh "$(cat VERSION)"` (needs the update key, see `docs/signing.md`). Then get the sha256 of the source archive from the release. The formula pins this release asset rather than the tag tarball, because GitHub's cache serves tag-recreated tarballs stale; asset URLs are deterministic and byte-verified:
    ```bash
    VERSION="$(tr -d '[:space:]' < VERSION)"
    curl -Ls "https://github.com/Spidey03/tessera/releases/download/v$VERSION/tessera-$VERSION.tar.gz" | shasum -a 256
@@ -234,12 +234,14 @@ The menu bar app includes a built-in updater: **Check for Updates…** (under th
 menu icon) queries the latest GitHub release and, when newer, offers
 **Install & Restart**; **Automatically Check for Updates** (default on) does the
 same shortly after launch. The updater reads the release's `appcast.json` asset
-(version, download URL, sha256, size), downloads `tessera-<version>-dist.zip`,
+(version, download URL, sha256, size), verifies its Ed25519 signature
+(`appcast.json.sig`) against a public key built into the app, downloads
+`tessera-<version>-dist.zip`, checks its size and sha256 against the appcast,
 extracts it into `~/Library/Application Support/Tessera`, and restarts the
 daemon + menu from the new bundle. Both artifacts are produced unconditionally
 by `scripts/build_release.sh`; the release workflow attaches
-`tessera-<version>-dist.zip` and `appcast.json` alongside the archive and DMG
-when a version tag is pushed.
+them to a draft release alongside the archive and DMG when a version tag is
+pushed, and `scripts/sign_release.sh` adds `appcast.json.sig` and publishes it.
 
 ### Hotkeys
 
