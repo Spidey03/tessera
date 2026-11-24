@@ -103,7 +103,7 @@ check() {
     else
         echo "   [!!] agent $LABEL_TILING NOT loaded" >&2; ok=1
     fi
-    if [ -f "$LOG_DAEMON" ] && rg -q "AX trusted: true" "$LOG_DAEMON"; then
+    if [ -f "$LOG_DAEMON" ] && grep -q "AX trusted: true" "$LOG_DAEMON"; then
         echo "   [ok] daemon holds Accessibility grants"
     else
         echo "   [!!] Accessibility grant not detected — grant Terminal in" >&2
@@ -123,7 +123,7 @@ check() {
 }
 
 is_developer_signed() {
-    codesign -dv "$1" 2>&1 | rg -q "Authority=Developer ID Application"
+    codesign -dvv "$1" 2>&1 | grep "Authority=Developer ID Application" >/dev/null
 }
 
 install() {
