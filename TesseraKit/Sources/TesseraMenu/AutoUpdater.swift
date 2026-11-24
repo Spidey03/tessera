@@ -84,7 +84,7 @@ final class AutoUpdater {
                 let staged = try AppInstaller.stage(zipURL: zip)
                 await self?.restartWith(stagedApp: staged)
             } catch {
-                self?.showAlert(message: "Update failed.", informative: "\(error)")
+                self?.showAlert(message: "Update failed.", informative: error.localizedDescription)
             }
         }
     }

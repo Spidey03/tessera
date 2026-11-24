@@ -106,6 +106,10 @@ cat > "$APPCAST" <<APPCAST_JSON
   "size": $DIST_SIZE
 }
 APPCAST_JSON
+
+# The appcast is signed offline by scripts/sign_release.sh, never in CI. The
+# in-app updater rejects it until then.
+rm -f "$APPCAST.sig"
 [ "$SIGNED" = true ] && [ "$NOTARIZED" = true ] && echo "   (notarized zip: $ZIP)"
 
 # --- 5. DMG -----------------------------------------------------------------
